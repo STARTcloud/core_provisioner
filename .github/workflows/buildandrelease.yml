@@ -1,0 +1,23 @@
+name: Build, Release and Publish
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - 
+        name: Release-Please
+        id: release
+        uses: GoogleCloudPlatform/release-please-action@v3
+        if: steps.vagrant-destroy.outputs.exit_code == 0
+        with:
+          command: manifest
+          default-branch: main
+          package-name: core_provisioner
+          bump-minor-pre-major: true
+          bump-patch-for-minor-pre-major: true
+          version-file: "core/version.rb"
