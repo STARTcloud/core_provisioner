@@ -51,7 +51,7 @@ jobs:
         with:
           files: core/ Vagrantfile provisioners/
           dest: ${{ env.app_name }}.zip
-          recursive: true
+          recursive: false
 
       - 
         name: Create release
