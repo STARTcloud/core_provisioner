@@ -174,6 +174,7 @@ class Hosts
             host['settings']['memory']= host['settings']['memory'].tr('^0-9', '')
           end
           vb.name = "#{host['settings']['server_id']}--#{host['settings']['hostname']}.#{host['settings']['domain']}"
+          vb.gui = host['settings']['show_console']
           vb.customize ['modifyvm', :id, '--ostype', host['settings']['os_type']]
           vb.customize ["modifyvm", :id, "--vrdeport", host['settings']['consoleport']]
           vb.customize ["modifyvm", :id, "--vrdeaddress", host['settings']['consolehost']]
@@ -223,15 +224,15 @@ class Hosts
 						disabled: folder['disabled']||= false
 					end
 				end
-
-        # Add Branch Files to Vagrant Share on VM Change to Git folders to pull
+        
         if host.has_key?('provisioning') and !host['provisioning'].nil?
-          scriptsPath = File.dirname(__FILE__) + '/scripts'
+          # Add Branch Files to Vagrant Share on VM Change to Git folders to pull
           if host['provisioning'].has_key?('role') && host['provisioning']['role']['enabled']
-              server.vm.provision 'shell' do |s|
-                s.path = scriptsPath + '/add-role.sh'
-                s.args = [host['provisioning']['role']['name'], host['provisioning']['role']['git_url'] ]
-              end
+            scriptsPath = File.dirname(__FILE__) + '/scripts'
+            server.vm.provision 'shell' do |s|
+              s.path = scriptsPath + '/add-role.sh'
+              s.args = [host['provisioning']['role']['name'], host['provisioning']['role']['git_url'] ]
+            end
           end
   
           # Run the shell provisioners defined in hosts.yml
@@ -300,7 +301,8 @@ class Hosts
           end
         end
       end
-      ## Open the browser after provisioning
+
+      ## Save variables to .vagrant directory
       if host.has_key?('networks') && host['settings']['provider-type'] == 'virtualbox'
         host['networks'].each_with_index do |network, netindex|
           config.trigger.after [:up] do |trigger|
