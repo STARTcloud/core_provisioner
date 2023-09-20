@@ -1,0 +1,68 @@
+name: MANUAL - Build, Release and Publish
+
+on:    
+  workflow_dispatch:
+    inputs:
+      env:
+        description: 'An Environment'
+        required: true
+        type: choice
+        default: production
+        options:
+          - development
+          - production
+      version:
+        description: 'A Version'
+        required: true
+        type: string
+      caching:
+        description: 'Use caching'
+        required: true
+        type: boolean
+        default: false
+      draft: 
+        description: 'Release as draft'
+        required: true
+        type: boolean
+        default: true
+
+env:
+  app_name: ${{ inputs.env == 'production' && 'core_provisioner' || 'core_provisioner-dev' }}
+  suffix: ${{ inputs.env == 'development' && '-dev' || '' }}
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build info
+        run: |
+          echo "Ref: ${{ github.ref_name }}"
+          echo "Env: ${{ inputs.env }}"
+          echo "Version: ${{ inputs.version }}"
+          echo "App Name: ${{ env.app_name }}"
+
+      - 
+        name: Checking out code
+        uses: actions/checkout@v2
+
+      -
+        name: Zipping Output
+        uses: vimtor/action-zip@v1
+        with:
+          files: core/ Vagrantfile provisioners/
+          dest: core.zip 
+
+      - 
+        name: Create release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: "${{ env.app_name }}: v${{ inputs.version }}"
+          tag_name: ${{ env.app_name }}/v${{ inputs.version }}${{ env.suffix }}
+          target_commitish: ${{ github.sha }}
+          body: |
+            This is a ${{ inputs.env }} release of ${{ env.app_name }}.
+          draft: ${{ inputs.draft }}
+          prerelease: ${{ inputs.env == 'development' }}
+          files: |
+            ${{ env.app_name }}.zip
+          fail_on_unmatched_files: true
