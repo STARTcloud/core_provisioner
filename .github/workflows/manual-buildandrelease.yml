@@ -50,7 +50,8 @@ jobs:
         uses: vimtor/action-zip@v1
         with:
           files: core/ Vagrantfile provisioners/
-          dest: ${{ env.app_name }}.zip 
+          dest: ${{ env.app_name }}.zip
+          recursive: true
 
       - 
         name: Create release
