@@ -46,11 +46,12 @@ jobs:
       -
         name: "Zipping Output"
         id: zip_artifact
-        uses: vimtor/action-zip@v1
+        uses: vimtor/action-zip@v2
         if: ${{ steps.release.outputs.release_created }}
         with:
           files: core/ Vagrantfile provisioners/
-          dest: ${{ env.app_name }}.zip 
+          dest: ${{ env.app_name }}.zip
+          recursive: true
 
       - 
         name: "Creating release"
