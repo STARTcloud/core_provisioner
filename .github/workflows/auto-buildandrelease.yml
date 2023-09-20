@@ -50,7 +50,7 @@ jobs:
         if: ${{ steps.release.outputs.release_created }}
         with:
           files: core/ Vagrantfile provisioners/
-          dest: core.zip 
+          dest: ${{ env.app_name }}.zip 
 
       - 
         name: "Creating release"
