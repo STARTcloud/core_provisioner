@@ -1,6 +1,10 @@
 # coding: utf-8
 require File.expand_path("#{File.dirname(__FILE__)}/version.rb")
 
+if File.file?("#{File.dirname(__FILE__)}/../version.rb")
+  require File.expand_path("#{File.dirname(__FILE__)}/../version.rb")
+end
+
 # This class takes the Hosts.yaml and set's the neccessary variables to run provider specific sequences to boot a VM.
 class Hosts
   def Hosts.configure(config, settings)
@@ -261,6 +265,8 @@ class Hosts
                       role_vars: host['vars'],
                       provision_roles: host['roles'],
                       core_provisioner_version: CoreProvisioner::VERSION,
+                      provisioner_name: Provisioner::NAME,
+                      provisioner_version: Provisioner::VERSION,
                       ansible_winrm_server_cert_validation: "ignore",
                       ansible_ssh_pipelining:localscript['ssh_pipelining'],
                       ansible_python_interpreter:localscript['ansible_python_interpreter']}
@@ -282,6 +288,8 @@ class Hosts
                       role_vars: host['vars'],
                       provision_roles: host['roles'],
                       core_provisioner_version: CoreProvisioner::VERSION,
+                      provisioner_name: Provisioner::NAME,
+                      provisioner_version: Provisioner::VERSION,
                       ansible_winrm_server_cert_validation: "ignore",
                       ansible_ssh_pipelining:remotescript['ssh_pipelining'],
                       ansible_python_interpreter:remotescript['ansible_python_interpreter']
