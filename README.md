@@ -43,6 +43,13 @@ Core Provisioner is a modular framework designed to simplify the provisioning of
 - **Default SSH Keys**: Provides default SSH keys for all STARTcloud Vagrant projects, simplifying the authentication process.
 - **Ansible Support**: Integrates Ansible support into the provisioning process, allowing for automated configuration management and deployment.
 
+## Submodule Support
+Include this as a submodule in other projects with the following command: 
+
+```
+git submodule add -b submodule https://github.com/STARTcloud/core_provisioner core
+```
+
 ## Vagrantfile Explained
 The Vagrantfile acts as the orchestrator that sets up and configures the virtual machines (VMs) based on the specifications found in the `Hosts.yml` file. It does this by requiring and executing the `Hosts.rb` script, which interprets the `Hosts.yml` file and generates the necessary Vagrant configurations. Here's a breakdown of what the Vagrantfile is doing:
 
