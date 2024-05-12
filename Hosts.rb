@@ -31,9 +31,9 @@ class Hosts
         config.vm.box_url = "#{host['settings']['box_url']}/#{host['settings']['box']}"
         server.vm.box_version = host['settings']['box_version']
         server.vm.boot_timeout = host['settings']['setup_wait']
+
         # Setup SSH and Prevent TTY errors
         server.ssh.username = host['settings']['vagrant_user']
-        #server.ssh.password =  host['settings']['vagrant_user_pass']
         server.ssh.private_key_path = host['settings']['vagrant_user_private_key_path']
         server.ssh.insert_key = host['settings']['vagrant_insert_key']
         server.ssh.forward_agent = host['settings']['ssh_forward_agent']
