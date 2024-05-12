@@ -28,7 +28,7 @@ class Hosts
 
         #Box Settings -- Used in downloading and packaging Vagrant boxes
         server.vm.box = host['settings']['box']
-        config.vm.box_url = "host['settings']['box_url']/#{host['settings']['box']}"
+        config.vm.box_url = "#{host['settings']['box_url']}/#{host['settings']['box']}"
         server.vm.box_version = host['settings']['box_version']
         server.vm.boot_timeout = host['settings']['setup_wait']
         # Setup SSH and Prevent TTY errors
