@@ -47,7 +47,7 @@ jobs:
 
       -
         name: Zipping Output
-        uses: vimtor/action-zip@v1
+        uses: vimtor/action-zip@v1.2
         with:
           files: core/ Vagrantfile provisioners/
           dest: ${{ env.app_name }}.zip
