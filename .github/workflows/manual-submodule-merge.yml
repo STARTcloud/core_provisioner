@@ -1,6 +1,9 @@
-name: MANUAL - Build, Release and Publish
+name: MANUAL - Merge-Submodule
 
-on:    
+on:
+#  push:
+#    branches:
+#      - submodule 
   workflow_dispatch:
     inputs:
       env:
@@ -31,7 +34,7 @@ env:
   suffix: ${{ inputs.env == 'development' && '-dev' || '' }}
 
 jobs:
-  release-please:
+  merge-submodule:
     runs-on: ubuntu-latest
     steps:
       - name: Build info
@@ -41,29 +44,19 @@ jobs:
           echo "Version: ${{ inputs.version }}"
           echo "App Name: ${{ env.app_name }}"
 
-      - 
-        name: Checking out code
+      - name: Checkout main branch
         uses: actions/checkout@v2
 
-      -
-        name: Zipping Output
-        uses: vimtor/action-zip@v1.2
+      - name: Switch to submodule branch
+        run: git checkout submodule
+      
+      - name: Merge submodule into main
+        run: |
+          git checkout main
+          git merge submodule --commit --no-edit
+      
+      - name: Push merged changes
+        uses: ad-m/github-push-action@master
         with:
-          files: core/ Vagrantfile provisioners/
-          dest: ${{ env.app_name }}.zip
-          recursive: false
-
-      - 
-        name: Create release
-        uses: softprops/action-gh-release@v1
-        with:
-          name: "${{ env.app_name }}: v${{ inputs.version }}"
-          tag_name: ${{ env.app_name }}/v${{ inputs.version }}${{ env.suffix }}
-          target_commitish: ${{ github.sha }}
-          body: |
-            This is a ${{ inputs.env }} release of ${{ env.app_name }}.
-          draft: ${{ inputs.draft }}
-          prerelease: ${{ inputs.env == 'development' }}
-          files: |
-            ${{ env.app_name }}.zip
-          fail_on_unmatched_files: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: main
