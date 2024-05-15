@@ -25,8 +25,6 @@ class Hosts
         end
       end
       config.vm.define "#{host['settings']['server_id']}--#{host['settings']['hostname']}.#{host['settings']['domain']}" do |server|
-
-        #Box Settings -- Used in downloading and packaging Vagrant boxes
         server.vm.box = host['settings']['box']
         config.vm.box_url = "#{host['settings']['box_url']}/#{host['settings']['box']}"
         server.vm.box_version = host['settings']['box_version']
