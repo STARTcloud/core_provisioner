@@ -298,6 +298,10 @@ class Hosts
                       ansible_ssh_pipelining:remotescript['ssh_pipelining'],
                       ansible_python_interpreter:remotescript['ansible_python_interpreter']
                     }
+                    if remotescript['remote_collections']
+                      ansible.galaxy_role_file = "requirements.yml"
+                      ansible.galaxy_roles_path = "./ansible/ansible_collections"
+                    end
                   end
                 end
               end
