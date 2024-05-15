@@ -3,7 +3,7 @@ name: AUTO - Build, Release and Publish
 on:
   push:
     branches:
-      - submodule
+      - main
 
 env:
   app_name: core_provisioner
@@ -15,34 +15,22 @@ jobs:
     outputs:
       my_output: ${{ steps.build_info.outputs.version }}
     steps:
-      -
-        name: "Running Release-Please"
+      - name: "Running Release-Please"
         id: release
         uses: google-github-actions/release-please-action@v3
         with:
           command: manifest
-          default-branch: submodule
+          default-branch: main
           package-name: core_provisioner
           bump-minor-pre-major: true
           bump-patch-for-minor-pre-major: true
-          version-file: "version.rb"
+          version-file: "core/version.rb"
 
-      - 
-        name: "Checking out code"
+      - name: "Checking out code"
         uses: actions/checkout@v2
         if: ${{ steps.release.outputs.release_created }}
 
-      - name: Merge development -> staging
-        uses: devmasx/merge-branch@master
-        with:
-          type: now
-          from_branch: submodule
-          target_branch: main
-          message: Merge submodule into main
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-
-      - 
-        name: "Displaying build info"
+      - name: "Displaying build info"
         id: build_info
         if: ${{ steps.release.outputs.release_created }}
         run: |
@@ -52,8 +40,7 @@ jobs:
           echo "Version: ${{ steps.release.outputs.major }}.${{ steps.release.outputs.minor }}.${{ steps.release.outputs.patch }}"
           echo "::set-output name=version::${{ steps.release.outputs.major }}.${{ steps.release.outputs.minor }}.${{ steps.release.outputs.patch }}"
 
-      -
-        name: "Zipping Output"
+      - name: "Zipping Output"
         id: zip_artifact
         uses: vimtor/action-zip@v1.2
         if: ${{ steps.release.outputs.release_created }}
@@ -62,8 +49,7 @@ jobs:
           dest: ${{ env.app_name }}.zip
           recursive: true
 
-      - 
-        name: "Creating release"
+      - name: "Creating release"
         id: create_release
         uses: softprops/action-gh-release@v1
         if: ${{ steps.release.outputs.release_created }}
@@ -78,3 +64,33 @@ jobs:
           files: |
             ${{ env.app_name }}.zip
           fail_on_unmatched_files: true
+
+  update_submodule_version:
+    runs-on: ubuntu-latest
+    needs: release
+    if: ${{ needs.release.outputs.my_output }}
+    steps:
+      - name: "Checking out submodule branch"
+        uses: actions/checkout@v2
+        with:
+          ref: submodule
+
+      - name: "Updating version.rb"
+        run: |
+          echo "Updating version.rb with new version"
+          echo "module Core" > core/version.rb
+          echo "  VERSION = '${{ needs.release.outputs.my_output }}'" >> core/version.rb
+          echo "end" >> core/version.rb
+
+      - name: "Committing changes"
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add core/version.rb
+          git commit -m "Update version.rb to ${{ needs.release.outputs.my_output }}"
+
+      - name: "Pushing changes"
+        uses: ad-m/github-push-action@v0.6.0
+        with:
+          branch: submodule
+          github_token: ${{ secrets.GITHUB_TOKEN }}
