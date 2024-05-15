@@ -78,7 +78,7 @@ jobs:
       - name: "Updating version.rb"
         run: |
           echo "Updating version.rb with new version"
-          echo "module Core" > version.rb
+          echo "module CoreProvisioner" > version.rb
           echo "  VERSION = '${{ needs.release.outputs.my_output }}'" >> version.rb
           echo "end" >> version.rb
 
