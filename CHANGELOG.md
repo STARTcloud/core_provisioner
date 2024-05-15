@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.7](https://github.com/STARTcloud/core_provisioner/compare/core_provisioner/v0.2.6...core_provisioner/v0.2.7) (2024-05-15)
+
+
+### Bug Fixes
+
+* update galaxy role file path ([9840de9](https://github.com/STARTcloud/core_provisioner/commit/9840de931ccf13e33c91f51e68456b84b963f0d9))
+
 ## [0.2.6](https://github.com/STARTcloud/core_provisioner/compare/core_provisioner/v0.2.5...core_provisioner/v0.2.6) (2024-05-15)
 
 
