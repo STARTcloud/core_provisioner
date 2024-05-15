@@ -227,6 +227,7 @@ class Hosts
 					end
 				end
         
+        # Begin Provisioning Sequences
         if host.has_key?('provisioning') and !host['provisioning'].nil?
           # Add Branch Files to Vagrant Share on VM Change to Git folders to pull
           if host['provisioning'].has_key?('role') && host['provisioning']['role']['enabled']
