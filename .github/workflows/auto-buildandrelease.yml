@@ -32,6 +32,15 @@ jobs:
         uses: actions/checkout@v2
         if: ${{ steps.release.outputs.release_created }}
 
+      - name: Merge development -> staging
+        uses: devmasx/merge-branch@master
+        with:
+          type: now
+          from_branch: submodule
+          target_branch: main
+          message: Merge submodule into main
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
       - 
         name: "Displaying build info"
         id: build_info

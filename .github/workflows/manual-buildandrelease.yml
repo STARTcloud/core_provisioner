@@ -45,6 +45,16 @@ jobs:
         name: Checking out code
         uses: actions/checkout@v2
 
+
+      - name: Merge development -> staging
+        uses: devmasx/merge-branch@master
+        with:
+          type: now
+          from_branch: submodule
+          target_branch: main
+          message: Merge submodule into main
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
       -
         name: Zipping Output
         uses: vimtor/action-zip@v1.2
