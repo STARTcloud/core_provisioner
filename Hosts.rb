@@ -10,7 +10,7 @@ class Hosts
   def Hosts.configure(config, settings)
 
     ## Load your Secrets file
-    secrets = YAML::load(File.read("#{File.dirname(__FILE__)}/.secrets.yml")) if File.exists?("#{File.dirname(__FILE__)}/.secrets.yml")
+    secrets = YAML::load(File.read("#{File.dirname(__FILE__)}/../.secrets.yml")) if File.exists?("#{File.dirname(__FILE__)}/../.secrets.yml")
 
     # Main loop to configure VM
     settings['hosts'].each_with_index do |host, index|
