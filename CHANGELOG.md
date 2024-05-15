@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.8](https://github.com/STARTcloud/core_provisioner/compare/core_provisioner/v0.2.7...core_provisioner/v0.2.8) (2024-05-15)
+
+
+### Bug Fixes
+
+* Hosts.rb ansible provisioner galaxy role ([8d29a70](https://github.com/STARTcloud/core_provisioner/commit/8d29a705796fdcb9c6c62bc83d635cab77d2df8d))
+
 ## [0.2.7](https://github.com/STARTcloud/core_provisioner/compare/core_provisioner/v0.2.6...core_provisioner/v0.2.7) (2024-05-15)
 
 
