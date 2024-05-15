@@ -5,47 +5,16 @@ on:
 #    branches:
 #      - submodule 
   workflow_dispatch:
-    inputs:
-      env:
-        description: 'An Environment'
-        required: true
-        type: choice
-        default: production
-        options:
-          - development
-          - production
-      version:
-        description: 'A Version'
-        required: true
-        type: string
-      caching:
-        description: 'Use caching'
-        required: true
-        type: boolean
-        default: false
-      draft: 
-        description: 'Release as draft'
-        required: true
-        type: boolean
-        default: true
-
-env:
-  app_name: ${{ inputs.env == 'production' && 'core_provisioner' || 'core_provisioner-dev' }}
-  suffix: ${{ inputs.env == 'development' && '-dev' || '' }}
 
 jobs:
   merge-submodule:
     runs-on: ubuntu-latest
     steps:
-      - name: Build info
-        run: |
-          echo "Ref: ${{ github.ref_name }}"
-          echo "Env: ${{ inputs.env }}"
-          echo "Version: ${{ inputs.version }}"
-          echo "App Name: ${{ env.app_name }}"
-
       - name: Checkout main branch
         uses: actions/checkout@v2
+
+      - name: Status
+        run: git status
 
       - name: Switch to submodule branch
         run: git checkout submodule
