@@ -78,15 +78,15 @@ jobs:
       - name: "Updating version.rb"
         run: |
           echo "Updating version.rb with new version"
-          echo "module Core" > core/version.rb
-          echo "  VERSION = '${{ needs.release.outputs.my_output }}'" >> core/version.rb
-          echo "end" >> core/version.rb
+          echo "module Core" > version.rb
+          echo "  VERSION = '${{ needs.release.outputs.my_output }}'" >> version.rb
+          echo "end" >> version.rb
 
       - name: "Committing changes"
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git add core/version.rb
+          git add version.rb
           git commit -m "Update version.rb to ${{ needs.release.outputs.my_output }}"
 
       - name: "Pushing changes"
