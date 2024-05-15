@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.2.5](https://github.com/STARTcloud/core_provisioner/compare/core_provisioner/v0.2.4...core_provisioner/v0.2.5) (2024-05-15)
+
+
+### Bug Fixes
+
+* actions can't go in submodule, pollutes directory ([72b2f49](https://github.com/STARTcloud/core_provisioner/commit/72b2f495cf2499fb27245cdd66feeef9576d3fc6))
+* Box URL ([de2f6d5](https://github.com/STARTcloud/core_provisioner/commit/de2f6d516413b425ce25c51d4dd5f2a966ce24f8))
+* build workflow ([52e9e99](https://github.com/STARTcloud/core_provisioner/commit/52e9e999df36e733ca7a73155f87655be7447e10))
+* include ansible galaxy requirements ([568c67b](https://github.com/STARTcloud/core_provisioner/commit/568c67bca08f899f8998c30161b70f528353fde0))
+* include github actions ([4aa941e](https://github.com/STARTcloud/core_provisioner/commit/4aa941ef684d1d7f00b1ceb1c381781d8ad95e0c))
+* include remote galaxy role installation capability ([9fd7a62](https://github.com/STARTcloud/core_provisioner/commit/9fd7a6255445ae983ef09944dd809b89e1288d29))
+* move github actions back to main ([4efe55d](https://github.com/STARTcloud/core_provisioner/commit/4efe55d40485e0dce9191fc2bcac372f19d6ef9a))
+* submodule workflow ([3061157](https://github.com/STARTcloud/core_provisioner/commit/3061157bb284ff44b15e289ccec13557f5ec0ec6))
+* test auto workflow ([3d3f9d9](https://github.com/STARTcloud/core_provisioner/commit/3d3f9d9905dcf4bc0b1c1d296581ef7ad9e52d9c))
+* Testing Submodule Merge ([59a62ef](https://github.com/STARTcloud/core_provisioner/commit/59a62ef8ae3b507a0c4c1bb7f543aecd7b8e6ea5))
+* testing workflows ([07a3fbd](https://github.com/STARTcloud/core_provisioner/commit/07a3fbd6bd47548a803a6cc010eb47f94305f408))
+* testing workflows ([b460dc2](https://github.com/STARTcloud/core_provisioner/commit/b460dc262e1242b0d6797139fe3958039023ea86))
+* testing workflows ([bed5ea5](https://github.com/STARTcloud/core_provisioner/commit/bed5ea54cfb59ec0ddf7e20e8bbd488d70bfca24))
+* testing workflows ([d1c4c14](https://github.com/STARTcloud/core_provisioner/commit/d1c4c1454c403222cce16a6e3dbc44a593325fbe))
+* testing workflows ([eca2103](https://github.com/STARTcloud/core_provisioner/commit/eca2103718ed7f19dab678a448a119b078220ee4))
+
 ## [0.2.4](https://github.com/STARTcloud/core_provisioner/compare/core_provisioner/v0.2.3...core_provisioner/v0.2.4) (2024-05-12)
 
 
