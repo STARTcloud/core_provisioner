@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.6](https://github.com/STARTcloud/core_provisioner/compare/core_provisioner/v0.2.5...core_provisioner/v0.2.6) (2024-05-15)
+
+
+### Bug Fixes
+
+* testing workflows ([a609391](https://github.com/STARTcloud/core_provisioner/commit/a60939171d09ac4ea7c745cc435bf86517b82af5))
+* testing workflows ([273d07f](https://github.com/STARTcloud/core_provisioner/commit/273d07f46c6dab341d8ad7b2e69d5c537347d8f0))
+* update ([6d4c19e](https://github.com/STARTcloud/core_provisioner/commit/6d4c19eaaa12405d5f658da94b91966cfea0597e))
+
 ## [0.2.5](https://github.com/STARTcloud/core_provisioner/compare/core_provisioner/v0.2.4...core_provisioner/v0.2.5) (2024-05-15)
 
 
