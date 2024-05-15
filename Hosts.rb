@@ -256,7 +256,7 @@ class Hosts
                     ansible.compatibility_mode = localscript['compatibility_mode'].to_s
                     ansible.install_mode = "pip" if localscript['install_mode'] == "pip"
                     ansible.verbose = localscript['verbose']
-                    ansible.galaxy_role_file = "requirements.yml" #localscript['remote_collections']
+                    ansible.galaxy_role_file = "/vagrant/ansible/requirements.yml"
                     ansible.galaxy_roles_path = "/vagrant/ansible/ansible_collections"
                     ansible.config_file = "/vagrant/ansible/ansible.cfg"
                     ansible.extra_vars = {
