@@ -334,6 +334,9 @@ class Hosts
               system("vagrant ssh -c 'cat /vagrant/completed/ipaddress.yml' > .vagrant/provisioned-briged-ip.txt")
               ipaddress = File.readlines(".vagrant/provisioned-briged-ip.txt").join("") if network['dhcp4']
               open_url = "https://" + ipaddress + ":443/welcome.html"
+              if host['settings']['vagrant_insert_key']
+                system("vagrant ssh -c 'cat /home/startcloud/.ssh/id_ssh_rsa' > #{host['settings']['vagrant_user_private_key_path']}")
+              end
               system("echo '" + open_url + "' > .vagrant/done.txt")
             end
           end
