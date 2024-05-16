@@ -49,7 +49,13 @@ class Hosts
               ## Use default route as the Gateway device
               bridge = network['bridge'] if defined?(network_bridge)
 
-              vm_interfaces = %x[VBoxManage list bridgedifs].split("\n")
+              if not Vagrant::Util::Platform.windows?
+                path_VBoxManage = "VBoxManage"
+              else
+                path_VBoxManage = "VBoxManage.exe"
+              end
+              
+              vm_interfaces = %x[#{path_VBoxManage} list bridgedifs].split("\n")
               interfaces = []
               vm_interfaces.each do |line|
                   interfaces.append(line) if line.start_with?('Name')
