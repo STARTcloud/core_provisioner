@@ -1,29 +1,24 @@
 # coding: utf-8
+# Load the CoreProvisioner Version Module
 require File.expand_path("#{File.dirname(__FILE__)}/version.rb")
+require 'open3'
+require 'yaml'
+require 'fileutils'
 
 if File.file?("#{File.dirname(__FILE__)}/../version.rb")
+  # Load the Current Provisioner Version Module
   require File.expand_path("#{File.dirname(__FILE__)}/../version.rb")
 end
 
 # This class takes the Hosts.yaml and set's the neccessary variables to run provider specific sequences to boot a VM.
 class Hosts
   def Hosts.configure(config, settings)
-
-    ## Load your Secrets file
-    secrets = YAML::load(File.read("#{File.dirname(__FILE__)}/../.secrets.yml")) if File.exists?("#{File.dirname(__FILE__)}/../.secrets.yml")
-
+    # Load your Secrets file
+    secrets = load_secrets
     # Main loop to configure VM
     settings['hosts'].each_with_index do |host, index|
+      configure_plugins(host)
       provider = host['provider-type']
-
-      if host.has_key?('plugins')
-        host['plugins'].each do |plugin|
-          unless Vagrant.has_plugin?("#{plugin}")
-            system("vagrant plugin install #{plugin}")
-            exit system('vagrant', *ARGV)
-          end
-        end
-      end
       config.vm.define "#{host['settings']['server_id']}--#{host['settings']['hostname']}.#{host['settings']['domain']}" do |server|
         server.vm.box = host['settings']['box']
         config.vm.box_url = "#{host['settings']['box_url']}/#{host['settings']['box']}"
@@ -31,8 +26,10 @@ class Hosts
         server.vm.boot_timeout = host['settings']['setup_wait']
         server.ssh.username = host['settings']['vagrant_user']
         #server.ssh.password =  host['settings']['vagrant_user_pass']
-        server.ssh.private_key_path = host['settings']['vagrant_user_private_key_path']
-        server.ssh.insert_key = host['settings']['vagrant_insert_key']
+        default_ssh_key = "./core/ssh_keys/id_rsa"
+        vagrant_ssh_key = host['settings']['vagrant_user_private_key_path']
+        server.ssh.private_key_path = File.exist?(vagrant_ssh_key) ? [vagrant_ssh_key, default_ssh_key] : default_ssh_key
+        server.ssh.insert_key = false # host['settings']['vagrant_insert_key'], Note we are no longer automatically forcing the key in via Vagrants SSH insertion function
         server.ssh.forward_agent = host['settings']['ssh_forward_agent']
         config.vm.communicator = :ssh
         config.winrm.username = host['settings']['vagrant_user']
@@ -41,50 +38,76 @@ class Hosts
         config.winrm.retry_delay = 30
         config.winrm.retry_limit = 1000
 
+        path_VBoxManage = Vagrant::Util::Platform.windows? ? "VBoxManage" : "VBoxManage.exe"
+
         ## Networking
-        ## Note Do not place two IPs in the same subnet on both nics at the same time, They must be different subnets or on a different network segment(ie VLAN, physical seperation for Linux VMs)
+        ## For every Network block in Hosts.yml, and if its not empty
         if host.has_key?('networks') and !host['networks'].empty?
+          ## This tells Virtualbox to set the Nat network so that we can avoid IP conflicts and more easily identify networks
+          ## This Nic cannot be removed which is why its not in the loop below
+          config.vm.provider "virtualbox" do |network_provider|
+            # https://github.com/Moonshine-IDE/Super.Human.Installer/issues/116
+            network_provider.customize ['modifyvm', :id, '--natnet1', '10.244.244.0/24']
+          end
+
+          ## Loop over each block, with an index so that we can use the ordering to specify interface number
           host['networks'].each_with_index do |network, netindex|
+              # For Virtualbox, we need to modify the MAC address if the user has specified one
               network['vmac'] = network['mac'].tr(':', '') if host['provider-type'] == 'virtualbox'
-              ## Use default route as the Gateway device
-              bridge = network['bridge'] if defined?(network_bridge)
-
-              if not Vagrant::Util::Platform.windows?
-                path_VBoxManage = "VBoxManage"
-              else
-                path_VBoxManage = "VBoxManage.exe"
-              end
               
+              ## Get the bridge device the user specifies, if none selected, we need to try our best to get the best one (for every OS: Mac, Windows, and Linux)
+              bridge = network['bridge'] if defined?(network_bridge)
+              
+              # Gather a list of Bridged Interfaces that Virtualbox is aware of, We only want to get the ones that are a status of Up.
               vm_interfaces = %x[#{path_VBoxManage} list bridgedifs].split("\n")
-              interfaces = []
-              vm_interfaces.each do |line|
-                  interfaces.append(line) if line.start_with?('Name')
-                  interfaces.append(line) if line.start_with?('Status')
-              end
-
-              pair = ""
-              pairs = []
-              interfaces.each_with_index do |line, index|
-                  pair = line if index %2 ==0 and line.start_with?("Name:")
-                  pairs.append(pair.sub("Name:", '').strip) if index %2 !=0 and line.include? "Up"
-                  pair = "" if index %2 !=0
-              end
-
-              defroute = ""
-              if not Vagrant::Util::Platform.windows?
-                %x[netstat -rn -f inet].split("\n").each do |line|
-                    defroute = line.split("\s") if line.include? "UG"
-                end
+              interfaces = vm_interfaces.select { |line| line.start_with?('Name') || line.start_with?('Status') }
+              pairs = interfaces.each_slice(2).select { |_, status_line| status_line.include? "Up" }.map { |name_line, _| name_line.sub("Name:", '').strip }
+          
+              # This gathers the default Route so as to further narrow the list of interfaces to use, since these would likely have public access
+              defroute = if Vagrant::Util::Platform.windows?
+                powershell_command = [
+                  "Get-NetRoute -DestinationPrefix '0.0.0.0/0'",
+                  "Sort-Object -Property { $_.InterfaceMetric + $_.RouteMetric }",
+                  "Get-NetAdapter -InterfaceIndex { $_.ifIndex }",
+                  "foreach { $_.InterfaceDescription }"
+                ].join(" | ")
+              
+                stdout, stderr, status = Open3.capture3("powershell", "-Command", powershell_command)
+                stdout.strip
               else
-                defroute = %x[powershell "Get-NetRoute -DestinationPrefix '0.0.0.0/0' | Sort-Object -Property { $_.InterfaceMetric + $_.RouteMetric } | Get-NetAdapter  -InterfaceIndex  { $_.ifIndex } |  foreach { $_.InterfaceDescription }"]
+                stdout, stderr, status = Open3.capture3("netstat -rn -f inet")
+                stdout.split("\n").find { |line| line.include? "UG" }&.split("\s")
+              end
+          
+              ## We then compare the interfaces that are up, and then compare that with the output of the defroute
+              pairs.each do |active_interface|
+                if Vagrant::Util::Platform.windows?
+                  bridge = active_interface if !defroute.nil? && active_interface.start_with?(defroute.to_s) && !defined?(network_bridge)
+                elsif Vagrant::Util::Platform.linux?
+                  bridge = active_interface if !defroute[7].nil? && active_interface.start_with?(defroute[7]) && !defined?(network_bridge)
+                elsif Vagrant::Util::Platform.darwin?
+                  bridge = active_interface if !defroute[3].nil? && active_interface.start_with?(defroute[3]) && !defined?(network_bridge)
+                end
               end
 
-              pairs.each_with_index do |active_interface, index|
-                bridge = active_interface if !defroute.nil? and active_interface.start_with?(defroute.to_s) and Vagrant::Util::Platform.windows? and !defined?(network_bridge)
-                bridge = active_interface if !defroute[7].nil? and active_interface.start_with?(defroute[7]) and Vagrant::Util::Platform.linux? and !defined?(network_bridge)
-                bridge = active_interface if !defroute[3].nil? and active_interface.start_with?(defroute[3]) and Vagrant::Util::Platform.darwin? and !defined?(network_bridge)
+              ## We then take those variables, and hopefully have the best connection to use and then pass it to vagrant so it can create the network adapters.
+              if network['type'] == 'host'
+                server.vm.network "private_network",
+                  ip: network['address'],
+                  dhcp: network['dhcp4'],
+                  dhcp6: network['dhcp6'],
+                  auto_config: network['autoconf'],
+                  netmask: network['netmask'],
+                  vmac: network['mac'],
+                  mac: network['vmac'],
+                  gateway: network['gateway'],
+                  nictype: network['type'],
+                  nic_number: netindex,
+                  managed: network['is_control'],
+                  vlan: network['vlan'],
+                  type: 'dhcp'#,
+                  #name: 'core_provisioner_network'
               end
-
               if network['type'] == 'external'
                 server.vm.network "public_network",
                   ip: network['address'],
@@ -100,11 +123,6 @@ class Hosts
                   nic_number: netindex,
                   managed: network['is_control'],
                   vlan: network['vlan']
-              end
-              if network['type'] == 'host'
-                server.vm.network "private_network",
-                  ip: network['address'],
-                  netmask: network['netmask']
               end
           end
         end
@@ -174,6 +192,18 @@ class Hosts
           end
         end
 
+        # Hook to run after destroy to clean up artifacts.
+        config.trigger.after :destroy do |trigger|
+          trigger.info = "Deleting specific files after VM is destroyed"
+          trigger.run = {
+            inline: <<-SCRIPT
+              rm -f ./.vagrant/done.txt
+              rm -f ./.vagrant/provisioned-adapters.yml
+              rm -f ./results.yml
+            SCRIPT
+          }
+        end
+
         ##### Begin Virtualbox Configurations #####
         server.vm.provider :virtualbox do |vb|
           if host['settings']['memory'] =~ /gb|g|/
@@ -194,7 +224,7 @@ class Hosts
           vb.customize ['modifyvm', :id, "--natdnshostresolver1", 'off']
           vb.customize ['modifyvm', :id, "--accelerate3d", 'off']
           vb.customize ['modifyvm', :id, "--vram", '256']
-
+          
           if host.has_key?('roles') and !host['roles'].empty?
             host['roles'].each do |rolefwds|
               if rolefwds.has_key?('port_forwards') and !rolefwds.empty?
@@ -257,7 +287,8 @@ class Hosts
             host['provisioning']['ansible']['scripts'].each do |scripts|
               if scripts.has_key?('local')
                 scripts['local'].each do |localscript|
-                  server.vm.provision :ansible_local do |ansible|
+                  run_value = localscript['always_run']? :always : :once
+                  server.vm.provision :ansible_local, run: run_value do |ansible|
                     ansible.playbook = localscript['script']
                     ansible.compatibility_mode = localscript['compatibility_mode'].to_s
                     ansible.install_mode = "pip" if localscript['install_mode'] == "pip"
@@ -323,25 +354,152 @@ class Hosts
         end
       end
 
-      ## Save variables to .vagrant directory
-      if host.has_key?('networks') && host['settings']['provider-type'] == 'virtualbox'
-        host['networks'].each_with_index do |network, netindex|
-          config.trigger.after [:up] do |trigger|
-            trigger.ruby do |env,machine|
-              puts "This server has been provisioned with core_provisioner v" + CoreProvisioner::VERSION
-              puts "https://github.com/STARTcloud/core_provisioner/releases/tag/v" + CoreProvisioner::VERSION
-              ipaddress = network['address']
-              system("vagrant ssh -c 'cat /vagrant/completed/ipaddress.yml' > .vagrant/provisioned-briged-ip.txt")
-              ipaddress = File.readlines(".vagrant/provisioned-briged-ip.txt").join("") if network['dhcp4']
-              open_url = "https://" + ipaddress + ":443/welcome.html"
-              if host['settings']['vagrant_insert_key']
-                system("vagrant ssh -c 'cat /home/startcloud/.ssh/id_ssh_rsa' > #{host['settings']['vagrant_user_private_key_path']}")
+    # Syncback to User Directory
+      config.trigger.after :rsync do |trigger|
+        ssh_private_key = host['settings']['vagrant_user_private_key_path']
+        ssh_username = host['settings']['vagrant_user']
+        ssh_options = "-e 'ssh -i #{ssh_private_key} -o StrictHostKeyChecking=no'"
+        file_path = File.join(Dir.pwd, 'results.yml')
+        adapters = File.exist?(file_path) ? YAML.load_file(file_path) : nil
+        puts adapters
+        if host.has_key?('folders') && host['settings']['provider-type'] == 'virtualbox' && !adapters.nil?
+          host['folders'].each do |folder|
+            if folder['syncback']
+              puts "rsync from on the VM"
+              if adapters['adapters'].is_a?(Array)
+                public_adapter = adapters['adapters'].find { |adapter| adapter['name'] == 'public_adapter' }
+                nat_adapter = adapters['adapters'].find { |adapter| adapter['name'] == 'nat_adapter' }
+                public_ip_address = public_adapter[:ip] if public_adapter
+                nat_ip_address = nat_adapter[:ip] if nat_adapter
+                ip_address = public_ip_address || nat_ip_address
+                puts "rsync from on the VM: #{ip_address}: #{folder['to']} to #{folder['map']}"
+                if ip_address
+                  trigger.name = "rsync from on the VM: #{ip_address}: #{folder['to']} to #{folder['map']}"
+                  puts "rsync from on the VM: #{ip_address}: #{folder['to']} to #{folder['map']}"
+                  source_path = folder['to']
+                  destination_path = folder['map']
+                  rsync_options = [
+                    "--rsync-path='sudo rsync'",
+                    "--verbose"
+                  ]
+                  rsync_options.concat(folder['args']) if folder.key?('args')
+                  rsync_options << "--chown=#{folder['owner']}" if folder.key?('owner')
+                  rsync_options << "--chgrp=#{folder['group']}" if folder.key?('group')
+                  rsync_command = "rsync #{rsync_options.join(' ')} #{ssh_options} #{ssh_username}@#{ip_address}:#{source_path} #{destination_path}"
+                  trigger.run = { inline: rsync_command }
+                end
               end
-              system("echo '" + open_url + "' > .vagrant/done.txt")
             end
           end
         end
       end
+      
+      ## Save variables to .vagrant directory
+      if host.has_key?('networks') && host['settings']['provider-type'] == 'virtualbox'
+        host['networks'].each_with_index do |network, netindex|
+          ## Post-Provisioning Vagrant Operations
+          config.trigger.after [:up] do |trigger|
+            trigger.ruby do |env, machine|
+              puts "This server has been provisioned with core_provisioner v#{CoreProvisioner::VERSION}"
+              puts "https://github.com/STARTcloud/core_provisioner/releases/tag/v#{CoreProvisioner::VERSION}"
+              puts "This server has been provisioned with #{Provisioner::NAME} v#{Provisioner::VERSION}"
+              puts "https://github.com/STARTcloud/#{Provisioner::NAME}/releases/tag/v#{Provisioner::VERSION}"
+      
+              system("vagrant ssh -c 'cat /vagrant/support-bundle/adapters.yml' > .vagrant/provisioned-adapters.yml")
+      
+              if File.exist?('.vagrant/provisioned-adapters.yml')
+                adapters_content = File.read('.vagrant/provisioned-adapters.yml')
+                begin
+                  adapters = YAML.load(adapters_content)
+                rescue Psych::SyntaxError => e
+                  puts "YAML Syntax Error: #{e.message}"
+                  adapters = nil
+                end
+
+                if adapters && adapters.is_a?(Hash) && adapters.key?('adapters')
+                  public_adapter = adapters['adapters'].find { |adapter| adapter['name'] == 'public_adapter' }
+                  nat_adapter = adapters['adapters'].find { |adapter| adapter['name'] == 'nat_adapter' }
+      
+                  ip_address = public_adapter&.fetch('ip') || nat_adapter&.fetch('ip')
+      
+                  ## Set the URL that SHI will Open
+                  open_url = "https://#{ip_address.split('/').first}:443/welcome.html"
+      
+                  ## This section replaces the default SSH key with one that the provisioner scripts generated
+                  ## Note if you enable insert key, but don't have  provisioner script that regenerates the key, this may fail
+                  if host['settings']['vagrant_insert_key']
+                    system("vagrant ssh -c 'cat /home/startcloud/.ssh/id_ssh_rsa' > #{host['settings']['vagrant_user_private_key_path']}")
+                    system(%x(vagrant ssh -c "sed -i '/vagrantup/d' /home/startcloud/.ssh/id_ssh_rsa"))
+                  end
+      
+                  filtered_adapters = adapters['adapters'].select { |adapter| adapter['name'] != 'public_adapter' }
+                  filtered_adapters.each do |adapter_hash|
+                    adapter_hash.transform_keys(&:to_s)
+                  end
+      
+                  output_data = {
+                    open_url: open_url,
+                    adapters: filtered_adapters
+                  }.to_yaml
+                  puts "Network Information Can be found here: #{File.join(Dir.pwd, 'results.yml')}"
+                  Hosts.write_results_file(output_data, 'results.yml')
+      
+                  puts open_url
+                  system("echo '" + open_url + "' > .vagrant/done.txt")
+                end
+              else
+                puts "Error: .vagrant/provisioned-adapters.yml file does not exist."
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+
+  def self.load_secrets
+    secrets_path = "#{File.dirname(__FILE__)}/../.secrets.yml"
+    YAML.load(File.read(secrets_path)) if File.exists?(secrets_path)
+  end
+
+  def self.configure_plugins(host)
+    plugins = Array(host['plugins'])
+    return if plugins.empty?
+  
+    plugins.each do |plugin|
+      next if Vagrant.has_plugin?(plugin)
+  
+      system("vagrant plugin install #{plugin}")
+      exit system('vagrant', *ARGV)
+    end
+  end
+
+  def self.delete_files(settings)
+    return unless settings['delete_old']
+
+    files_to_delete = [
+      'hcl_domino_standalone_provisioner/.vagrant/done.txt',
+      'hcl_domino_standalone_provisioner/.vagrant/provisioned-adapters.yml',
+      'hcl_domino_standalone_provisioner/results.yml'
+    ]
+
+    files_to_delete.each do |file|
+      if File.exist?(file)
+        File.delete(file)
+        puts "Deleted file: #{file}"
+      else
+        puts "File not found: #{file}"
+      end
+    end
+  end
+
+  def self.write_results_file(data, file_path)
+    # Delete the file if it exists
+    File.delete(file_path) if File.exist?(file_path)
+
+    # Write the new content
+    File.open(file_path, 'w') do |file|
+      file.write(data.to_yaml.gsub(/:(\w+):/, '\1:'))
     end
   end
 end
