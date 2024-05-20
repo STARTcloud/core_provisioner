@@ -194,14 +194,15 @@ class Hosts
 
         # Hook to run after destroy to clean up artifacts.
         config.trigger.after :destroy do |trigger|
-          trigger.info = "Deleting specific files after VM is destroyed"
-          trigger.run = {
-            inline: <<-SCRIPT
-              rm -f ./.vagrant/done.txt
-              rm -f ./.vagrant/provisioned-adapters.yml
-              rm -f ./results.yml
-            SCRIPT
-          }
+          trigger.info = "Deleting cached files"
+          files_to_delete = [
+            '.vagrant/done.txt',
+            '.vagrant/provisioned-adapters.yml',
+            'results.yml'
+          ]
+          trigger.ruby do
+            Hosts.delete_files(trigger, files_to_delete)
+          end
         end
 
         ##### Begin Virtualbox Configurations #####
@@ -287,7 +288,16 @@ class Hosts
             host['provisioning']['ansible']['scripts'].each do |scripts|
               if scripts.has_key?('local')
                 scripts['local'].each do |localscript|
-                  run_value = localscript['always_run']? :always : :once
+                  run_value = case localscript['run']
+                    when 'always'
+                      :always
+                    when 'once'
+                      File.exist?(File.join(Dir.pwd, 'results.yml')) ? :never : :once
+                    when 'not_first'
+                      File.exist?(File.join(Dir.pwd, 'results.yml')) ? :always : :never
+                    else
+                      :once
+                    end
                   server.vm.provision :ansible_local, run: run_value do |ansible|
                     ansible.playbook = localscript['script']
                     ansible.compatibility_mode = localscript['compatibility_mode'].to_s
@@ -317,7 +327,17 @@ class Hosts
               ## If Ansible is available on the host or is not installed in the template you are spinning up, use 'ansible'
               if scripts.has_key?('remote')
                 scripts['remote'].each do |remotescript|
-                  server.vm.provision :ansible do |ansible|
+                  run_value = case localscript['run']
+                    when 'always'
+                      :always
+                    when 'once'
+                      File.exist?(File.join(Dir.pwd, 'results.yml')) ? :never : :once
+                    when 'not_first'
+                      File.exist?(File.join(Dir.pwd, 'results.yml')) ? :always : :never
+                    else
+                      :once
+                    end
+                  server.vm.provision :ansible, run: run_value do |ansible|
                     ansible.playbook = remotescript['script']
                     ansible.compatibility_mode = remotescript['compatibility_mode'].to_s
                     ansible.verbose = remotescript['verbose']
@@ -354,46 +374,6 @@ class Hosts
         end
       end
 
-    # Syncback to User Directory
-      config.trigger.after :rsync do |trigger|
-        ssh_private_key = host['settings']['vagrant_user_private_key_path']
-        ssh_username = host['settings']['vagrant_user']
-        ssh_options = "-e 'ssh -i #{ssh_private_key} -o StrictHostKeyChecking=no'"
-        file_path = File.join(Dir.pwd, 'results.yml')
-        adapters = File.exist?(file_path) ? YAML.load_file(file_path) : nil
-        puts adapters
-        if host.has_key?('folders') && host['settings']['provider-type'] == 'virtualbox' && !adapters.nil?
-          host['folders'].each do |folder|
-            if folder['syncback']
-              puts "rsync from on the VM"
-              if adapters['adapters'].is_a?(Array)
-                public_adapter = adapters['adapters'].find { |adapter| adapter['name'] == 'public_adapter' }
-                nat_adapter = adapters['adapters'].find { |adapter| adapter['name'] == 'nat_adapter' }
-                public_ip_address = public_adapter[:ip] if public_adapter
-                nat_ip_address = nat_adapter[:ip] if nat_adapter
-                ip_address = public_ip_address || nat_ip_address
-                puts "rsync from on the VM: #{ip_address}: #{folder['to']} to #{folder['map']}"
-                if ip_address
-                  trigger.name = "rsync from on the VM: #{ip_address}: #{folder['to']} to #{folder['map']}"
-                  puts "rsync from on the VM: #{ip_address}: #{folder['to']} to #{folder['map']}"
-                  source_path = folder['to']
-                  destination_path = folder['map']
-                  rsync_options = [
-                    "--rsync-path='sudo rsync'",
-                    "--verbose"
-                  ]
-                  rsync_options.concat(folder['args']) if folder.key?('args')
-                  rsync_options << "--chown=#{folder['owner']}" if folder.key?('owner')
-                  rsync_options << "--chgrp=#{folder['group']}" if folder.key?('group')
-                  rsync_command = "rsync #{rsync_options.join(' ')} #{ssh_options} #{ssh_username}@#{ip_address}:#{source_path} #{destination_path}"
-                  trigger.run = { inline: rsync_command }
-                end
-              end
-            end
-          end
-        end
-      end
-      
       ## Save variables to .vagrant directory
       if host.has_key?('networks') && host['settings']['provider-type'] == 'virtualbox'
         host['networks'].each_with_index do |network, netindex|
@@ -421,26 +401,23 @@ class Hosts
                   nat_adapter = adapters['adapters'].find { |adapter| adapter['name'] == 'nat_adapter' }
       
                   ip_address = public_adapter&.fetch('ip') || nat_adapter&.fetch('ip')
-      
-                  ## Set the URL that SHI will Open
+
                   open_url = "https://#{ip_address.split('/').first}:443/welcome.html"
-      
-                  ## This section replaces the default SSH key with one that the provisioner scripts generated
-                  ## Note if you enable insert key, but don't have  provisioner script that regenerates the key, this may fail
+          
                   if host['settings']['vagrant_insert_key']
                     system("vagrant ssh -c 'cat /home/startcloud/.ssh/id_ssh_rsa' > #{host['settings']['vagrant_user_private_key_path']}")
                     system(%x(vagrant ssh -c "sed -i '/vagrantup/d' /home/startcloud/.ssh/id_ssh_rsa"))
                   end
-      
-                  filtered_adapters = adapters['adapters'].select { |adapter| adapter['name'] != 'public_adapter' }
-                  filtered_adapters.each do |adapter_hash|
-                    adapter_hash.transform_keys(&:to_s)
+          
+                  adapters['adapters'].each do |adapter_hash|
+                    adapter_hash.transform_keys!(&:to_s)
                   end
-      
+          
                   output_data = {
-                    open_url: open_url,
-                    adapters: filtered_adapters
-                  }.to_yaml
+                    'open_url' => open_url,
+                    'adapters' => adapters['adapters']
+                  }
+          
                   puts "Network Information Can be found here: #{File.join(Dir.pwd, 'results.yml')}"
                   Hosts.write_results_file(output_data, 'results.yml')
       
@@ -474,32 +451,24 @@ class Hosts
     end
   end
 
-  def self.delete_files(settings)
-    return unless settings['delete_old']
-
-    files_to_delete = [
-      'hcl_domino_standalone_provisioner/.vagrant/done.txt',
-      'hcl_domino_standalone_provisioner/.vagrant/provisioned-adapters.yml',
-      'hcl_domino_standalone_provisioner/results.yml'
-    ]
-
+  def self.delete_files(trigger, files_to_delete)
     files_to_delete.each do |file|
       if File.exist?(file)
-        File.delete(file)
-        puts "Deleted file: #{file}"
+        FileUtils.rm_f(file)
+        trigger.info = "Deleted file: #{file}"
       else
-        puts "File not found: #{file}"
+        trigger.info = "File not found: #{file}"
       end
     end
   end
 
   def self.write_results_file(data, file_path)
-    # Delete the file if it exists
     File.delete(file_path) if File.exist?(file_path)
-
-    # Write the new content
     File.open(file_path, 'w') do |file|
-      file.write(data.to_yaml.gsub(/:(\w+):/, '\1:'))
+      file.flock(File::LOCK_EX) # Exclusive lock
+      file.write(data.to_yaml)
+      file.flock(File::LOCK_UN) # Unlock the file
     end
   end
+
 end
