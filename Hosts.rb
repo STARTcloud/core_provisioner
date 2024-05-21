@@ -291,8 +291,6 @@ class Hosts
                   run_value = case localscript['run']
                     when 'always'
                       :always
-                    when 'once'
-                      File.exist?(File.join(Dir.pwd, 'results.yml')) ? :never : :once
                     when 'not_first'
                       File.exist?(File.join(Dir.pwd, 'results.yml')) ? :always : :never
                     else
@@ -404,6 +402,7 @@ class Hosts
 
                   open_url = "https://#{ip_address.split('/').first}:443/welcome.html"
           
+                  ## Copy the Updated Key from the VM, and then Delete the default Template Key from the VM
                   if host['settings']['vagrant_insert_key']
                     system("vagrant ssh -c 'cat /home/startcloud/.ssh/id_ssh_rsa' > #{host['settings']['vagrant_user_private_key_path']}")
                     system(%x(vagrant ssh -c "sed -i '/vagrantup/d' /home/startcloud/.ssh/id_ssh_rsa"))
