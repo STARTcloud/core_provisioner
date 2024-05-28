@@ -38,7 +38,11 @@ class Hosts
         config.winrm.retry_delay = 30
         config.winrm.retry_limit = 1000
 
-        path_VBoxManage = Vagrant::Util::Platform.windows? ? "VBoxManage" : "VBoxManage.exe"
+        if Vagrant::Util::Platform.windows?  || Vagrant::Util::Platform.cygwin?
+          path_VBoxManage = "VBoxManage.exe"
+        elsif Vagrant::Util::Platform.wsl? || Vagrant::Util::Platform.darwin? || Vagrant::Util::Platform.linux?  || Vagrant::Util::Platform.bsd? || Vagrant::Util::Platform.solaris?
+          path_VBoxManage = "VBoxManage"
+        end
 
         ## Networking
         ## For every Network block in Hosts.yml, and if its not empty
