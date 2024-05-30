@@ -101,21 +101,49 @@ class Hosts
               end
 
               ## We then take those variables, and hopefully have the best connection to use and then pass it to vagrant so it can create the network adapters.
+
+        #if host.has_key?('networks')
+        #  host['networks'].each_with_index do |network, netindex|
+        #      if network['type'] == 'external'
+        #        server.vm.network "public_network", 
+        #          ip: network['address'], 
+        #          dhcp4: network['dhcp4'], 
+        #          dhcp6: network['dhcp6'], 
+        #          bridge: network['bridge'], 
+        #          auto_config: network['autoconf'], 
+        #          netmask: network['netmask'], 
+        #          mac: network['mac'],
+        #          gateway: network['gateway'],
+        #          nictype: network['type'],
+        #          nic_number: netindex,
+        #          managed: network['is_control'],
+        #          vlan: network['vlan'],
+        #          dns: network['dns'],
+        #          provisional: network['provisional'],
+        #          route: network['route']
+        #      end
+        #  end
+        #end
               if network['type'] == 'host'
                 server.vm.network "private_network",
+                  bridge: network['bridge'],
                   ip: network['address'],
+                  gateway: network['gateway'],
+                  netmask: network['netmask'],
+                  type: 'dhcp',
                   dhcp: network['dhcp4'],
+                  dhcp4: network['dhcp4'], 
                   dhcp6: network['dhcp6'],
                   auto_config: network['autoconf'],
-                  netmask: network['netmask'],
                   vmac: network['mac'],
                   mac: network['vmac'],
-                  gateway: network['gateway'],
                   nictype: network['type'],
                   nic_number: netindex,
                   managed: network['is_control'],
                   vlan: network['vlan'],
-                  type: 'dhcp'#,
+                  dns: network['dns'],
+                  provisional: network['provisional'],
+                  route: network['route']
                   #name: 'core_provisioner_network'
               end
               if network['type'] == 'external'
@@ -137,6 +165,7 @@ class Hosts
           end
         end
 
+        ##### Begin Virtualbox Configurations #####
         ##### Disk Configurations #####
         ## https://sleeplessbeastie.eu/2021/05/10/how-to-define-multiple-disks-inside-vagrant-using-virtualbox-provider/
         disks_directory = File.join("./", "disks")
@@ -144,7 +173,7 @@ class Hosts
         ## Create Disks
         config.trigger.before :up do |trigger|
           if host.has_key?('disks') and !host['disks'].empty?
-            trigger.name = "Create disks"
+            trigger.name = "Creating disks"
             trigger.ruby do
               unless File.directory?(disks_directory)
                 FileUtils.mkdir_p(disks_directory)
@@ -161,7 +190,7 @@ class Hosts
           end
         end
 
-        # create storage controller on first run
+        # Create storage controller on first run
         if host.has_key?('disks') and !host['disks'].empty?
           unless File.directory?(disks_directory)
             config.vm.provider "virtualbox" do |storage_provider|
@@ -182,7 +211,7 @@ class Hosts
           end
         end
 
-        # cleanup after "destroy" action
+        # Cleanup Disks after "destroy" action
         config.trigger.after :destroy do |trigger|
           if host.has_key?('disks') and !host['disks'].empty?
             trigger.name = "Cleanup operation"
@@ -202,21 +231,6 @@ class Hosts
           end
         end
 
-        # Hook to run after destroy to clean up artifacts.
-        config.trigger.after :destroy do |trigger|
-          trigger.info = "Deleting cached files"
-          files_to_delete = [
-            '.vagrant/done.txt',
-            '.vagrant/provisioned-adapters.yml',
-            'results.yml',
-            host['settings']['vagrant_user_private_key_path']
-          ]
-          trigger.ruby do
-            Hosts.delete_files(trigger, files_to_delete)
-          end
-        end
-
-        ##### Begin Virtualbox Configurations #####
         server.vm.provider :virtualbox do |vb|
           if host['settings']['memory'] =~ /gb|g|/
             host['settings']['memory']= 1024 * host['settings']['memory'].tr('^0-9', '').to_i
@@ -256,6 +270,113 @@ class Hosts
           end
         end
         ##### End Virtualbox Configurations #####
+
+        ##### Begin ZONE type Configurations #####
+        #if host.has_key?('networks')
+        #  host['networks'].each_with_index do |network, netindex|
+        #      if network['type'] == 'external'
+        #        server.vm.network "public_network", 
+        #          ip: network['address'], 
+        #          dhcp4: network['dhcp4'], 
+        #          dhcp6: network['dhcp6'], 
+        #          bridge: network['bridge'], 
+        #          auto_config: network['autoconf'], 
+        #          netmask: network['netmask'], 
+        #          mac: network['mac'],
+        #          gateway: network['gateway'],
+        #          nictype: network['type'],
+        #          nic_number: netindex,
+        #          managed: network['is_control'],
+        #          vlan: network['vlan'],
+        #          dns: network['dns'],
+        #          provisional: network['provisional'],
+        #          route: network['route']
+        #      end
+        #      if network['type'] == 'host'
+        #        server.vm.network "private_network",
+        #          ip: network['address'],
+        #          dhcp4: network['dhcp4'],
+        #          dhcp6: network['dhcp6'],
+        #          bridge: network['bridge'], 
+        #          auto_config: network['autoconf'],
+        #          netmask: network['netmask'], 
+        #          mac: network['mac'],
+        #          gateway: network['gateway'],
+        #          nictype: network['type'],
+        #          nic_number: netindex,
+        #          managed: network['is_control'],
+        #          vlan: network['vlan'],
+        #          dns: network['dns'],
+        #          provisional: network['provisional'],
+        #          route: network['route']
+        #      end
+        #  end
+        #end
+        if host['provider-type'] == 'zone'
+          server.vm.provider :zone do |vm|
+            vm.hostname                             = "#{host['settings']['subdomain']}.#{host['settings']['domain']}"
+            vm.name                                 = "#{host['settings']['partition_id']}--#{host['settings']['subdomain']}.#{host['settings']['domain']}"
+            vm.partition_id                         = host['settings']['server_id']
+  
+            vm.vagrant_cloud_creator                = host['settings']['cloud_creator']
+            vm.boxshortname                         = host['settings']['boxshortname']
+  
+            vm.cloud_init_password                  = host['settings']['vagrant_user_pass']
+            vm.vagrant_user_private_key_path        = host['settings']['vagrant_user_private_key_path']
+            vm.vagrant_user                         = host['settings']['vagrant_user']
+            vm.vagrant_user_pass                    = host['settings']['vagrant_user_pass']
+  
+            vm.os_type                              = host['settings']['os_type']
+            vm.firmware_type                        = host['settings']['firmware_type']
+            vm.setup_wait                           = host['settings']['setup_wait']
+            vm.consoleport                          = host['settings']['consoleport']
+            vm.consolehost                          = host['settings']['consolehost']
+  
+            vm.memory                               = host['settings']['memory']
+            vm.cpus                                 = host['settings']['vcpus']
+            vm.dns                                  = host['networks']
+  
+            vm.boot                                 = host['disks']['boot']
+            vm.additional_disks                     = host['disks']['additional_disks']
+            vm.cdroms                               = host['disks']['cdroms']
+  
+            vm.autoboot                             = host['zones']['autostart']
+            vm.brand                                = host['zones']['brand']
+            vm.zunlockbootkey                       = host['zones']['zunlockbootkey']
+            vm.zunlockboot                          = host['zones']['zunlockboot']
+            vm.cpu_configuration                    = host['zones']['cpu_configuration']
+            vm.complex_cpu_conf                     = host['zones']['complex_cpu_conf']
+            vm.console_onboot                       = host['zones']['console_onboot']
+            vm.console                              = host['zones']['console']
+            vm.override                             = host['zones']['override']
+            vm.acpi                                 = host['zones']['acpi']
+            vm.shared_disk_enabled                  = host['zones']['shared_lofs_disk_enabled']
+            vm.shared_dir                           = host['zones']['shared_lofs_dir']
+            vm.custom_ci_web_root                   = host['zones']['custom_ci_web_root']
+            vm.ci_port                              = host['zones']['ci_port']
+            vm.ci_listen                            = host['zones']['ci_listen']
+            vm.custom_ci                            = host['zones']['custom_ci']
+            vm.allowed_address                      = host['zones']['allowed_address']
+            vm.diskif                               = host['zones']['diskif']
+            vm.netif                                = host['zones']['netif']
+            vm.hostbridge                           = host['zones']['hostbridge']
+            vm.clean_shutdown_time                  = host['zones']['clean_shutdown_time']
+            vm.vmtype                               = host['zones']['vmtype']
+            vm.booted_string                        = host['zones']['booted_string']
+            vm.lcheck                               = host['zones']['lcheck_string']
+            vm.alcheck                              = host['zones']['alcheck_string']
+            vm.debug_boot                           = host['zones']['debug_boot']
+            vm.debug                                = host['zones']['debug']
+            vm.snapshot_script                      = host['zones']['snapshot_script']
+            vm.cloud_init_enabled                   = host['zones']['cloud_init_enabled']
+            vm.cloud_init_dnsdomain                 = host['zones']['cloud_init_dnsdomain']
+            vm.cloud_init_conf                      = host['zones']['cloud_init_conf']
+            vm.safe_restart                         = host['zones']['safe_restart']
+            vm.safe_shutdown                        = host['zones']['safe_shutdown']
+            vm.setup_method                         = host['zones']['setup_method']
+          end
+        end
+        ## End Vagrant-Zones Configurations
 
         # Register shared folders
         if host.has_key?('folders')
@@ -324,6 +445,7 @@ class Hosts
                       provisioner_name: Provisioner::NAME,
                       provisioner_version: Provisioner::VERSION,
                       ansible_winrm_server_cert_validation: "ignore",
+                      ansible_callbacks_enabled:localplaybook['callbacks'],
                       ansible_ssh_pipelining:localplaybook['ssh_pipelining'],
                       ansible_python_interpreter:localplaybook['ansible_python_interpreter']}
                     if localplaybook['remote_collections']
@@ -387,27 +509,43 @@ class Hosts
         end
       end
 
-     ## Syncback
-     if host.has_key?('folders') && Vagrant.has_plugin?("vagrant-scp")
-      host['folders'].each do |folder|
-        if folder['syncback']
-          config.trigger.after :rsync, type: :command do |trigger|
-            trigger.info = "Running custom rsync trigger"
-            trigger.ruby do |env, machine|
-                transfer_cmd = "vagrant scp :#{folder['to']}* #{folder['map']}"
-                puts transfer_cmd
-                system(transfer_cmd)
+      # Hook to run after destroy to clean up artifacts.
+      config.trigger.after :destroy do |trigger|
+        trigger.info = "Deleting cached files"
+        files_to_delete = [
+          '.vagrant/done.txt',
+          '.vagrant/provisioned-adapters.yml',
+          'results.yml',
+          host['settings']['vagrant_user_private_key_path']
+        ]
+        trigger.ruby do
+          Hosts.delete_files(trigger, files_to_delete)
+        end
+      end
+
+      ## Syncback
+      if host.has_key?('folders') && Vagrant.has_plugin?("vagrant-scp")
+        host['folders'].each do |folder|
+          if folder['syncback']
+            config.trigger.after :rsync, type: :command do |trigger|
+              trigger.info = "Using SCP to sync from Guest to Host"
+              trigger.ruby do |env, machine|
+                  transfer_cmd = "vagrant scp :#{folder['to']}* #{folder['map']}"
+                  puts transfer_cmd
+                  system(transfer_cmd)
               end
             end
           end
         end
       end
 
+
+
       ## Save variables to .vagrant directory
       if host.has_key?('networks') && host['settings']['provider-type'] == 'virtualbox'
         host['networks'].each_with_index do |network, netindex|
-          ## Post-Provisioning Vagrant Operations
           config.trigger.after [:up] do |trigger|
+            trigger.info = "Post-Provisioning Vagrant Operations"
             trigger.ruby do |env, machine|
               puts "This server has been provisioned with core_provisioner v#{CoreProvisioner::VERSION}"
               puts "https://github.com/STARTcloud/core_provisioner/releases/tag/v#{CoreProvisioner::VERSION}"
@@ -475,6 +613,22 @@ class Hosts
                 puts "Error: .vagrant/provisioned-adapters.yml file does not exist."
               end
             end
+          end
+        end
+      end
+
+      if host['zones'] && host['zones'].has_key?('post_provision_boot') && host['zones']['post_provision_boot'] && host['settings']['provider-type'] == 'zone'
+        config.trigger.after [:up, :provision] do |trigger|
+          trigger.info = "post_provision_boot is true, Waiting for instance to stop"
+          trigger.ruby do |env, machine|
+            sleep 30
+            loop do
+              system("vagrant status #{machine.name}")
+              break if %x(vagrant status #{machine.name}) =~ /stopped/
+              sleep 10
+            end
+            post_reboot_cmd = "pfexec zoneadm -z #{machine.name} boot"
+            system(post_reboot_cmd)
           end
         end
       end
