@@ -18,6 +18,12 @@ class Hosts
     # Main loop to configure VM
     settings['hosts'].each_with_index do |host, index|
       configure_plugins(host)
+      
+      ENV['VAGRANT_NO_PARALLEL'] = 'yes'
+      if host['settings'].has_key?('parallel') && host['settings']['parallel']
+        ENV['VAGRANT_NO_PARALLEL'] = 'no'
+      end
+
       provider = host['provider-type']
       config.vm.define "#{host['settings']['server_id']}--#{host['settings']['hostname']}.#{host['settings']['domain']}" do |server|
         server.vm.box = host['settings']['box']
@@ -38,9 +44,9 @@ class Hosts
         config.winrm.retry_delay = 30
         config.winrm.retry_limit = 1000
 
-        if Vagrant::Util::Platform.windows?  || Vagrant::Util::Platform.cygwin?
+        if Vagrant::Util::Platform.windows?  || Vagrant::Util::Platform.cygwin? || Vagrant::Util::Platform.wsl? 
           path_VBoxManage = "VBoxManage.exe"
-        elsif Vagrant::Util::Platform.wsl? || Vagrant::Util::Platform.darwin? || Vagrant::Util::Platform.linux?  || Vagrant::Util::Platform.bsd? || Vagrant::Util::Platform.solaris?
+        elsif Vagrant::Util::Platform.darwin? || Vagrant::Util::Platform.linux?  || Vagrant::Util::Platform.bsd? || Vagrant::Util::Platform.solaris?
           path_VBoxManage = "VBoxManage"
         end
 
@@ -202,7 +208,8 @@ class Hosts
           files_to_delete = [
             '.vagrant/done.txt',
             '.vagrant/provisioned-adapters.yml',
-            'results.yml'
+            'results.yml',
+            host['settings']['vagrant_user_private_key_path']
           ]
           trigger.ruby do
             Hosts.delete_files(trigger, files_to_delete)
@@ -289,10 +296,10 @@ class Hosts
           # Run the Ansible Provisioners -- You can pass Host.yaml variables to Ansible via the Extra_vars variable as noted below.
           ## If Ansible is not available on the host and is installed in the template you are spinning up, use 'ansible-local'
           if host['provisioning'].has_key?('ansible') && host['provisioning']['ansible']['enabled']
-            host['provisioning']['ansible']['scripts'].each do |scripts|
-              if scripts.has_key?('local')
-                scripts['local'].each do |localscript|
-                  run_value = case localscript['run']
+            host['provisioning']['ansible']['playbooks'].each do |playbooks|
+              if playbooks.has_key?('local')
+                playbooks['local'].each do |localplaybook|
+                  run_value = case localplaybook['run']
                     when 'always'
                       :always
                     when 'not_first'
@@ -301,10 +308,10 @@ class Hosts
                       :once
                     end
                   server.vm.provision :ansible_local, run: run_value do |ansible|
-                    ansible.playbook = localscript['script']
-                    ansible.compatibility_mode = localscript['compatibility_mode'].to_s
-                    ansible.install_mode = "pip" if localscript['install_mode'] == "pip"
-                    ansible.verbose = localscript['verbose']
+                    ansible.playbook = localplaybook['playbook']
+                    ansible.compatibility_mode = localplaybook['compatibility_mode'].to_s
+                    ansible.install_mode = "pip" if localplaybook['install_mode'] == "pip"
+                    ansible.verbose = localplaybook['verbose']
                     ansible.config_file = "/vagrant/ansible/ansible.cfg"
                     ansible.extra_vars = {
                       settings: host['settings'],
@@ -312,13 +319,14 @@ class Hosts
                       secrets: secrets,
                       role_vars: host['vars'],
                       provision_roles: host['roles'],
+                      playbook_collections: localplaybook['collections'],
                       core_provisioner_version: CoreProvisioner::VERSION,
                       provisioner_name: Provisioner::NAME,
                       provisioner_version: Provisioner::VERSION,
                       ansible_winrm_server_cert_validation: "ignore",
-                      ansible_ssh_pipelining:localscript['ssh_pipelining'],
-                      ansible_python_interpreter:localscript['ansible_python_interpreter']}
-                    if localscript['remote_collections']
+                      ansible_ssh_pipelining:localplaybook['ssh_pipelining'],
+                      ansible_python_interpreter:localplaybook['ansible_python_interpreter']}
+                    if localplaybook['remote_collections']
                       ansible.galaxy_role_file = "/vagrant/ansible/requirements.yml"
                       ansible.galaxy_roles_path = "/vagrant/ansible/ansible_collections"
                     end
@@ -327,9 +335,9 @@ class Hosts
               end
   
               ## If Ansible is available on the host or is not installed in the template you are spinning up, use 'ansible'
-              if scripts.has_key?('remote')
-                scripts['remote'].each do |remotescript|
-                  run_value = case localscript['run']
+              if playbooks.has_key?('remote')
+                playbooks['remote'].each do |remoteplaybook|
+                  run_value = case remoteplaybook['run']
                     when 'always'
                       :always
                     when 'once'
@@ -340,9 +348,9 @@ class Hosts
                       :once
                     end
                   server.vm.provision :ansible, run: run_value do |ansible|
-                    ansible.playbook = remotescript['script']
-                    ansible.compatibility_mode = remotescript['compatibility_mode'].to_s
-                    ansible.verbose = remotescript['verbose']
+                    ansible.playbook = remoteplaybook['playbook']
+                    ansible.compatibility_mode = remoteplaybook['compatibility_mode'].to_s
+                    ansible.verbose = remoteplaybook['verbose']
                     ansible.extra_vars = {
                       settings: host['settings'],
                       networks: host['networks'],
@@ -352,11 +360,12 @@ class Hosts
                       core_provisioner_version: CoreProvisioner::VERSION,
                       provisioner_name: Provisioner::NAME,
                       provisioner_version: Provisioner::VERSION,
+                      collections: remoteplaybook['collections'],
                       ansible_winrm_server_cert_validation: "ignore",
-                      ansible_ssh_pipelining:remotescript['ssh_pipelining'],
-                      ansible_python_interpreter:remotescript['ansible_python_interpreter']
+                      ansible_ssh_pipelining:remoteplaybook['ssh_pipelining'],
+                      ansible_python_interpreter:remoteplaybook['ansible_python_interpreter']
                     }
-                    if remotescript['remote_collections']
+                    if remoteplaybook['remote_collections']
                       ansible.galaxy_role_file = "requirements.yml"
                       ansible.galaxy_roles_path = "./ansible/ansible_collections"
                     end
@@ -368,9 +377,27 @@ class Hosts
   
           # Run the Docker-Compose provisioners defined in hosts.yml
           if host['provisioning'].has_key?('docker') && host['provisioning']['docker']['enabled']
-            host['provisioning']['docker']['docker_compose'].each do |file|
-                server.vm.provision 'docker'
+            server.vm.provision 'docker'
+            if host['provisioning']['docker'].has_key?('docker-compose')
+              host['provisioning']['docker']['docker_compose'].each do |file|
                 server.vm.provision :docker_compose, yml: file, run: "always"
+              end
+            end
+          end
+        end
+      end
+
+     ## Syncback
+     if host.has_key?('folders') && Vagrant.has_plugin?("vagrant-scp")
+      host['folders'].each do |folder|
+        if folder['syncback']
+          config.trigger.after :rsync, type: :command do |trigger|
+            trigger.info = "Running custom rsync trigger"
+            trigger.ruby do |env, machine|
+                transfer_cmd = "vagrant scp :#{folder['to']}* #{folder['map']}"
+                puts transfer_cmd
+                system(transfer_cmd)
+              end
             end
           end
         end
@@ -386,9 +413,17 @@ class Hosts
               puts "https://github.com/STARTcloud/core_provisioner/releases/tag/v#{CoreProvisioner::VERSION}"
               puts "This server has been provisioned with #{Provisioner::NAME} v#{Provisioner::VERSION}"
               puts "https://github.com/STARTcloud/#{Provisioner::NAME}/releases/tag/v#{Provisioner::VERSION}"
-      
-              system("vagrant ssh -c 'cat /vagrant/support-bundle/adapters.yml' > .vagrant/provisioned-adapters.yml")
-      
+              
+              transfer_cmd = "vagrant scp :/vagrant/support-bundle/adapters.yml .vagrant/provisioned-adapters.yml"
+              transfer_cmd = "vagrant ssh -c 'cat /vagrant/support-bundle/adapters.yml' > .vagrant/provisioned-adapters.yml" if not Vagrant.has_plugin?("vagrant-scp")
+              system(transfer_cmd)
+
+              ansible_log = "vagrant scp :/home/#{host['settings']['vagrant_user']}/ansible.log #{host['settings']['server_id']}--#{host['settings']['hostname']}.#{host['settings']['domain']}-ansible.log"
+              system(ansible_log) if Vagrant.has_plugin?("vagrant-scp")
+
+              support_bundle = "vagrant scp :/vagrant/support-bundle.zip support-bundle.zip"
+              system(support_bundle) if Vagrant.has_plugin?("vagrant-scp")
+              
               if File.exist?('.vagrant/provisioned-adapters.yml')
                 adapters_content = File.read('.vagrant/provisioned-adapters.yml')
                 begin
@@ -406,12 +441,6 @@ class Hosts
 
                   open_url = "https://#{ip_address.split('/').first}:443/welcome.html"
           
-                  ## Copy the Updated Key from the VM, and then Delete the default Template Key from the VM
-                  if host['settings']['vagrant_insert_key']
-                    system("vagrant ssh -c 'cat /home/startcloud/.ssh/id_ssh_rsa' > #{host['settings']['vagrant_user_private_key_path']}")
-                    system(%x(vagrant ssh -c "sed -i '/vagrantup/d' /home/startcloud/.ssh/id_ssh_rsa"))
-                  end
-          
                   adapters['adapters'].each do |adapter_hash|
                     adapter_hash.transform_keys!(&:to_s)
                   end
@@ -426,6 +455,21 @@ class Hosts
       
                   puts open_url
                   system("echo '" + open_url + "' > .vagrant/done.txt")
+                  
+                  ## For CI/CD Automation Purposes Only
+                  if host['settings']['debug_build']
+                    id_transfer_cmd = "vagrant ssh -c 'cat /vagrant/ansible/Hosts.template.yml.SHI' > Hosts.template.yml.SHI"
+                    id_transfer_cmd = "vagrant scp :/vagrant/ansible/Hosts.template.yml.SHI Hosts.template.yml.SHI" if Vagrant.has_plugin?("vagrant-scp")
+                    system(id_transfer_cmd)
+                  end
+
+                  ## Copy the Updated Key from the VM, and then Delete the default Template Key from the VM
+                  if host['settings']['vagrant_insert_key']
+                    id_transfer_cmd = "vagrant ssh -c 'cat /home/startcloud/.ssh/id_ssh_rsa' > #{host['settings']['vagrant_user_private_key_path']}"
+                    id_transfer_cmd = "vagrant scp :/home/startcloud/.ssh/id_ssh_rsa #{host['settings']['vagrant_user_private_key_path']}" if Vagrant.has_plugin?("vagrant-scp")
+                    system(id_transfer_cmd)
+                    system(%x(vagrant ssh -c "sed -i '/vagrantup/d' /home/startcloud/.ssh/id_ssh_rsa"))
+                  end
                 end
               else
                 puts "Error: .vagrant/provisioned-adapters.yml file does not exist."
