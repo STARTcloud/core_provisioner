@@ -31,7 +31,7 @@ class Hosts
         server.vm.box_version = host['settings']['box_version']
         server.vm.boot_timeout = host['settings']['setup_wait']
         server.ssh.username = host['settings']['vagrant_user']
-        #server.ssh.password =  host['settings']['vagrant_user_pass']
+        #server.ssh.password = host['settings']['vagrant_user_pass']
         default_ssh_key = "./core/ssh_keys/id_rsa"
         vagrant_ssh_key = host['settings']['vagrant_user_private_key_path']
         server.ssh.private_key_path = File.exist?(vagrant_ssh_key) ? [vagrant_ssh_key, default_ssh_key] : default_ssh_key
@@ -62,68 +62,11 @@ class Hosts
 
           ## Loop over each block, with an index so that we can use the ordering to specify interface number
           host['networks'].each_with_index do |network, netindex|
-              # For Virtualbox, we need to modify the MAC address if the user has specified one
-              network['vmac'] = network['mac'].tr(':', '') if host['provider-type'] == 'virtualbox'
-              
               ## Get the bridge device the user specifies, if none selected, we need to try our best to get the best one (for every OS: Mac, Windows, and Linux)
               bridge = network['bridge'] if defined?(network_bridge)
-              
-              # Gather a list of Bridged Interfaces that Virtualbox is aware of, We only want to get the ones that are a status of Up.
-              vm_interfaces = %x[#{path_VBoxManage} list bridgedifs].split("\n")
-              interfaces = vm_interfaces.select { |line| line.start_with?('Name') || line.start_with?('Status') }
-              pairs = interfaces.each_slice(2).select { |_, status_line| status_line.include? "Up" }.map { |name_line, _| name_line.sub("Name:", '').strip }
-          
-              # This gathers the default Route so as to further narrow the list of interfaces to use, since these would likely have public access
-              defroute = if Vagrant::Util::Platform.windows?
-                powershell_command = [
-                  "Get-NetRoute -DestinationPrefix '0.0.0.0/0'",
-                  "Sort-Object -Property { $_.InterfaceMetric + $_.RouteMetric }",
-                  "Get-NetAdapter -InterfaceIndex { $_.ifIndex }",
-                  "foreach { $_.InterfaceDescription }"
-                ].join(" | ")
-              
-                stdout, stderr, status = Open3.capture3("powershell", "-Command", powershell_command)
-                stdout.strip
-              else
-                stdout, stderr, status = Open3.capture3("netstat -rn -f inet")
-                stdout.split("\n").find { |line| line.include? "UG" }&.split("\s")
-              end
-          
-              ## We then compare the interfaces that are up, and then compare that with the output of the defroute
-              pairs.each do |active_interface|
-                if Vagrant::Util::Platform.windows?
-                  bridge = active_interface if !defroute.nil? && active_interface.start_with?(defroute.to_s) && !defined?(network_bridge)
-                elsif Vagrant::Util::Platform.linux?
-                  bridge = active_interface if !defroute[7].nil? && active_interface.start_with?(defroute[7]) && !defined?(network_bridge)
-                elsif Vagrant::Util::Platform.darwin?
-                  bridge = active_interface if !defroute[3].nil? && active_interface.start_with?(defroute[3]) && !defined?(network_bridge)
-                end
-              end
+              bridge = get_bridge_interface(path_VBoxManage) if bridge.nil?
 
               ## We then take those variables, and hopefully have the best connection to use and then pass it to vagrant so it can create the network adapters.
-
-        #if host.has_key?('networks')
-        #  host['networks'].each_with_index do |network, netindex|
-        #      if network['type'] == 'external'
-        #        server.vm.network "public_network", 
-        #          ip: network['address'], 
-        #          dhcp4: network['dhcp4'], 
-        #          dhcp6: network['dhcp6'], 
-        #          bridge: network['bridge'], 
-        #          auto_config: network['autoconf'], 
-        #          netmask: network['netmask'], 
-        #          mac: network['mac'],
-        #          gateway: network['gateway'],
-        #          nictype: network['type'],
-        #          nic_number: netindex,
-        #          managed: network['is_control'],
-        #          vlan: network['vlan'],
-        #          dns: network['dns'],
-        #          provisional: network['provisional'],
-        #          route: network['route']
-        #      end
-        #  end
-        #end
               if network['type'] == 'host'
                 server.vm.network "private_network",
                   bridge: network['bridge'],
@@ -135,9 +78,9 @@ class Hosts
                   dhcp4: network['dhcp4'], 
                   dhcp6: network['dhcp6'],
                   auto_config: network['autoconf'],
-                  vmac: network['mac'],
+                  vmac: host['provider-type'] == 'virtualbox' ? network['mac'].tr(':', '') : network['mac'],
                   mac: network['vmac'],
-                  nictype: network['type'],
+                  nic_type: network['nic_type'],
                   nic_number: netindex,
                   managed: network['is_control'],
                   vlan: network['vlan'],
@@ -148,19 +91,23 @@ class Hosts
               end
               if network['type'] == 'external'
                 server.vm.network "public_network",
-                  ip: network['address'],
-                  dhcp: network['dhcp4'],
-                  dhcp6: network['dhcp6'],
                   bridge: bridge,
-                  auto_config: network['autoconf'],
-                  netmask: network['netmask'],
-                  vmac: network['mac'],
-                  mac: network['vmac'],
+                  ip: network['address'],
                   gateway: network['gateway'],
-                  nictype: network['type'],
+                  netmask: network['netmask'],
+                  dhcp: network['dhcp4'],
+                  dhcp4: network['dhcp4'], 
+                  dhcp6: network['dhcp6'],
+                  auto_config: network['autoconf'],
+                  vmac: host['provider-type'] == 'virtualbox' ? network['mac'].tr(':', '') : network['mac'],
+                  mac: network['vmac'],
+                  nic_type: network['nic_type'],
                   nic_number: netindex,
                   managed: network['is_control'],
-                  vlan: network['vlan']
+                  vlan: network['vlan'],
+                  dns: network['dns'],
+                  provisional: network['provisional'],
+                  route: network['route']
               end
           end
         end
@@ -182,8 +129,10 @@ class Hosts
               host['disks']['additional_disks'].each_with_index do |disks, diskindex|
                 local_disk_filename = File.join(disks_directory, "#{disks['volume_name']}.vdi")
                 unless File.exist?(local_disk_filename)
-                  puts "Creating \"#{disks['volume_name']}\" disk with size \"#{disks['size'].delete('^0-9').to_i * 1024}\""
-                  system("VBoxManage createmedium --filename #{local_disk_filename} --size #{disks['size'].delete('^0-9').to_i * 1024} --format VDI")
+                  disk_size_gb = disks['size'].match(/(\d+(\.\d+)?)/)[0].to_f
+                  disk_size_mb = (disk_size_gb * 1024).to_i
+                  puts "Creating \"#{disks['volume_name']}\" disk with size \"#{disk_size_mb}\" MB (#{disk_size_gb} GB)"
+                  system("#{path_VBoxManage} createmedium --filename #{local_disk_filename} --size #{disk_size_mb} --format VDI")
                 end
               end
             end  
@@ -221,7 +170,7 @@ class Hosts
                 local_disk_filename = File.join(disks_directory, "#{disks['volume_name']}.vdi")
                 if File.exist?(local_disk_filename)
                   puts "Deleting \"#{disks['volume_name']}\" disk"
-                  system("vboxmanage closemedium disk #{local_disk_filename} --delete")
+                  system("#{path_VBoxManage} closemedium disk #{local_disk_filename} --delete")
                 end
               end
               if File.exist?(disks_directory)
@@ -272,46 +221,6 @@ class Hosts
         ##### End Virtualbox Configurations #####
 
         ##### Begin ZONE type Configurations #####
-        #if host.has_key?('networks')
-        #  host['networks'].each_with_index do |network, netindex|
-        #      if network['type'] == 'external'
-        #        server.vm.network "public_network", 
-        #          ip: network['address'], 
-        #          dhcp4: network['dhcp4'], 
-        #          dhcp6: network['dhcp6'], 
-        #          bridge: network['bridge'], 
-        #          auto_config: network['autoconf'], 
-        #          netmask: network['netmask'], 
-        #          mac: network['mac'],
-        #          gateway: network['gateway'],
-        #          nictype: network['type'],
-        #          nic_number: netindex,
-        #          managed: network['is_control'],
-        #          vlan: network['vlan'],
-        #          dns: network['dns'],
-        #          provisional: network['provisional'],
-        #          route: network['route']
-        #      end
-        #      if network['type'] == 'host'
-        #        server.vm.network "private_network",
-        #          ip: network['address'],
-        #          dhcp4: network['dhcp4'],
-        #          dhcp6: network['dhcp6'],
-        #          bridge: network['bridge'], 
-        #          auto_config: network['autoconf'],
-        #          netmask: network['netmask'], 
-        #          mac: network['mac'],
-        #          gateway: network['gateway'],
-        #          nictype: network['type'],
-        #          nic_number: netindex,
-        #          managed: network['is_control'],
-        #          vlan: network['vlan'],
-        #          dns: network['dns'],
-        #          provisional: network['provisional'],
-        #          route: network['route']
-        #      end
-        #  end
-        #end
         if host['provider-type'] == 'zone'
           server.vm.provider :zone do |vm|
             vm.hostname                             = "#{host['settings']['subdomain']}.#{host['settings']['domain']}"
@@ -378,6 +287,10 @@ class Hosts
         end
         ## End Vagrant-Zones Configurations
 
+        if host['vars'].has_key?('git_vault_password')
+          Hosts.write_results_file(host['vars']['git_vault_password'], 'provisioners/ansible/git_vault_password', false)
+        end
+
         # Register shared folders
         if host.has_key?('folders')
 					host['folders'].each do |folder|
@@ -437,6 +350,7 @@ class Hosts
                     ansible.extra_vars = {
                       settings: host['settings'],
                       networks: host['networks'],
+                      disks: host['disks'],
                       secrets: secrets,
                       role_vars: host['vars'],
                       provision_roles: host['roles'],
@@ -476,14 +390,16 @@ class Hosts
                     ansible.extra_vars = {
                       settings: host['settings'],
                       networks: host['networks'],
+                      disks: host['disks'],
                       secrets: secrets,
                       role_vars: host['vars'],
                       provision_roles: host['roles'],
+                      playbook_collections: remoteplaybook['collections'],
                       core_provisioner_version: CoreProvisioner::VERSION,
                       provisioner_name: Provisioner::NAME,
                       provisioner_version: Provisioner::VERSION,
-                      collections: remoteplaybook['collections'],
                       ansible_winrm_server_cert_validation: "ignore",
+                      ansible_callbacks_enabled:localplaybook['callbacks'],
                       ansible_ssh_pipelining:remoteplaybook['ssh_pipelining'],
                       ansible_python_interpreter:remoteplaybook['ansible_python_interpreter']
                     }
@@ -525,21 +441,21 @@ class Hosts
 
       ## Syncback
       if host.has_key?('folders') && Vagrant.has_plugin?("vagrant-scp")
+        prefix = "==> #{host['settings']['server_id']}--#{host['settings']['hostname']}.#{host['settings']['domain']}:"
         host['folders'].each do |folder|
-          if folder['syncback']
-            config.trigger.after :rsync, type: :command do |trigger|
-              trigger.info = "Using SCP to sync from Guest to Host"
-              trigger.ruby do |env, machine|
-                  transfer_cmd = "vagrant scp :#{folder['to']}* #{folder['map']}"
-                  puts transfer_cmd
-                  system(transfer_cmd)
-              end
+          next unless folder['syncback']
+          config.trigger.after :rsync, type: :command do |trigger|
+            trigger.info = "Using SCP to sync from Guest to Host"
+            trigger.ruby do |env, machine|
+              guest_path = folder['to']
+              host_path = folder['map'].split(/(?<=\/)[^\/]*$/).last
+              transfer_cmd = "vagrant scp :#{guest_path} #{host_path}"
+              puts "#{ prefix } #{ transfer_cmd }"
+              system(transfer_cmd)
             end
           end
         end
       end
-
-
 
       ## Save variables to .vagrant directory
       if host.has_key?('networks') && host['settings']['provider-type'] == 'virtualbox'
@@ -547,11 +463,13 @@ class Hosts
           config.trigger.after [:up] do |trigger|
             trigger.info = "Post-Provisioning Vagrant Operations"
             trigger.ruby do |env, machine|
-              puts "This server has been provisioned with core_provisioner v#{CoreProvisioner::VERSION}"
-              puts "https://github.com/STARTcloud/core_provisioner/releases/tag/v#{CoreProvisioner::VERSION}"
-              puts "This server has been provisioned with #{Provisioner::NAME} v#{Provisioner::VERSION}"
-              puts "https://github.com/STARTcloud/#{Provisioner::NAME}/releases/tag/v#{Provisioner::VERSION}"
+              prefix = "==> #{host['settings']['server_id']}--#{host['settings']['hostname']}.#{host['settings']['domain']}:"
+              puts "#{ prefix } This server has been provisioned with core_provisioner v#{CoreProvisioner::VERSION}"
+              puts "#{ prefix } https://github.com/STARTcloud/core_provisioner/releases/tag/v#{CoreProvisioner::VERSION}"
+              puts "#{ prefix } This server has been provisioned with #{Provisioner::NAME} v#{Provisioner::VERSION}"
+              puts "#{ prefix } https://github.com/STARTcloud/#{Provisioner::NAME}/releases/tag/v#{Provisioner::VERSION}"
               
+              puts "#{ prefix } Transferring Debugging files back to Host" 
               transfer_cmd = "vagrant scp :/vagrant/support-bundle/adapters.yml .vagrant/provisioned-adapters.yml"
               transfer_cmd = "vagrant ssh -c 'cat /vagrant/support-bundle/adapters.yml' > .vagrant/provisioned-adapters.yml" if not Vagrant.has_plugin?("vagrant-scp")
               system(transfer_cmd)
@@ -587,15 +505,16 @@ class Hosts
                     'open_url' => open_url,
                     'adapters' => adapters['adapters']
                   }
-          
-                  puts "Network Information Can be found here: #{File.join(Dir.pwd, 'results.yml')}"
-                  Hosts.write_results_file(output_data, 'results.yml')
-      
-                  puts open_url
+                  puts "#{ prefix } Network Information Can be found here: "
+                  puts "#{ prefix }     #{File.join(Dir.pwd, 'results.yml')}"
+                  Hosts.write_results_file(output_data, 'results.yml', true)
+                  puts "#{ prefix } You can access the Welcome Page Here: " 
+                  puts "#{ prefix }     #{ open_url }"
                   system("echo '" + open_url + "' > .vagrant/done.txt")
                   
                   ## For CI/CD Automation Purposes Only
                   if host['settings']['debug_build']
+                    puts "#{ prefix } Transferring Hosts Template back to Host" 
                     id_transfer_cmd = "vagrant ssh -c 'cat /vagrant/ansible/Hosts.template.yml.SHI' > Hosts.template.yml.SHI"
                     id_transfer_cmd = "vagrant scp :/vagrant/ansible/Hosts.template.yml.SHI Hosts.template.yml.SHI" if Vagrant.has_plugin?("vagrant-scp")
                     system(id_transfer_cmd)
@@ -603,6 +522,7 @@ class Hosts
 
                   ## Copy the Updated Key from the VM, and then Delete the default Template Key from the VM
                   if host['settings']['vagrant_insert_key']
+                    puts "#{ prefix } Transferring New SSH key" 
                     id_transfer_cmd = "vagrant ssh -c 'cat /home/startcloud/.ssh/id_ssh_rsa' > #{host['settings']['vagrant_user_private_key_path']}"
                     id_transfer_cmd = "vagrant scp :/home/startcloud/.ssh/id_ssh_rsa #{host['settings']['vagrant_user_private_key_path']}" if Vagrant.has_plugin?("vagrant-scp")
                     system(id_transfer_cmd)
@@ -635,6 +555,43 @@ class Hosts
     end
   end
 
+  def self.get_bridge_interface(path_VBoxManage)
+    # Gather a list of Bridged Interfaces that Virtualbox is aware of, We only want to get the ones that are a status of Up.
+    vm_interfaces = %x[#{path_VBoxManage} list bridgedifs].split("\n")
+    interfaces = vm_interfaces.select { |line| line.start_with?('Name') || line.start_with?('Status') }
+    pairs = interfaces.each_slice(2).select { |_, status_line| status_line.include? "Up" }.map { |name_line, _| name_line.sub("Name:", '').strip }
+
+    # This gathers the default Route so as to further narrow the list of interfaces to use, since these would likely have public access
+    defroute = if Vagrant::Util::Platform.windows?
+      powershell_command = [
+        "Get-NetRoute -DestinationPrefix '0.0.0.0/0'",
+        "Sort-Object -Property { $_.InterfaceMetric + $_.RouteMetric }",
+        "Get-NetAdapter -InterfaceIndex { $_.ifIndex }",
+        "foreach { $_.InterfaceDescription }"
+      ].join(" | ")
+
+      stdout, stderr, status = Open3.capture3("powershell", "-Command", powershell_command)
+      stdout.strip
+    else
+      stdout, stderr, status = Open3.capture3("netstat -rn -f inet")
+      stdout.split("\n").find { |line| line.include? "UG" }&.split("\s")
+    end
+
+    # We then compare the interfaces that are up, and then compare that with the output of the defroute
+    bridge = nil
+    pairs.each do |active_interface|
+      if Vagrant::Util::Platform.windows?
+        bridge = active_interface if !defroute.nil? && active_interface.start_with?(defroute.to_s) && !defined?(network_bridge)
+      elsif Vagrant::Util::Platform.linux?
+        bridge = active_interface if !defroute[7].nil? && active_interface.start_with?(defroute[7]) && !defined?(network_bridge)
+      elsif Vagrant::Util::Platform.darwin?
+        bridge = active_interface if !defroute[3].nil? && active_interface.start_with?(defroute[3]) && !defined?(network_bridge)
+      end
+    end
+
+    bridge
+  end
+
   def self.load_secrets
     secrets_path = "#{File.dirname(__FILE__)}/../.secrets.yml"
     YAML.load(File.read(secrets_path)) if File.exists?(secrets_path)
@@ -663,11 +620,12 @@ class Hosts
     end
   end
 
-  def self.write_results_file(data, file_path)
+  def self.write_results_file(data, file_path, yaml)
     File.delete(file_path) if File.exist?(file_path)
     File.open(file_path, 'w') do |file|
       file.flock(File::LOCK_EX) # Exclusive lock
-      file.write(data.to_yaml)
+      file.write(data) if not yaml
+      file.write(data.to_yaml) if yaml
       file.flock(File::LOCK_UN) # Unlock the file
     end
   end
