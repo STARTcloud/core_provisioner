@@ -354,6 +354,8 @@ class Hosts
                       secrets: secrets,
                       role_vars: host['vars'],
                       provision_roles: host['roles'],
+                      provision_pre_tasks: host['pre_tasks'],
+                      provision_post_tasks: host['post_tasks'],
                       playbook_collections: localplaybook['collections'],
                       core_provisioner_version: CoreProvisioner::VERSION,
                       provisioner_name: Provisioner::NAME,
