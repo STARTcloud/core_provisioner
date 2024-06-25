@@ -442,7 +442,7 @@ class Hosts
       end
 
       ## Syncback
-      if host.has_key?('folders') && Vagrant.has_plugin?("vagrant-scp")
+      if host.has_key?('folders') && Vagrant.has_plugin?("vagrant-scp-sync")
         prefix = "==> #{host['settings']['server_id']}--#{host['settings']['hostname']}.#{host['settings']['domain']}:"
         host['folders'].each do |folder|
           next unless folder['syncback']
@@ -473,14 +473,14 @@ class Hosts
               
               puts "#{ prefix } Transferring Debugging files back to Host" 
               transfer_cmd = "vagrant scp :/vagrant/support-bundle/adapters.yml .vagrant/provisioned-adapters.yml"
-              transfer_cmd = "vagrant ssh -c 'cat /vagrant/support-bundle/adapters.yml' > .vagrant/provisioned-adapters.yml" if not Vagrant.has_plugin?("vagrant-scp")
+              transfer_cmd = "vagrant ssh -c 'cat /vagrant/support-bundle/adapters.yml' > .vagrant/provisioned-adapters.yml" if not Vagrant.has_plugin?("vagrant-scp-sync")
               system(transfer_cmd)
 
               ansible_log = "vagrant scp :/home/#{host['settings']['vagrant_user']}/ansible.log #{host['settings']['server_id']}--#{host['settings']['hostname']}.#{host['settings']['domain']}-ansible.log"
-              system(ansible_log) if Vagrant.has_plugin?("vagrant-scp")
+              system(ansible_log) if Vagrant.has_plugin?("vagrant-scp-sync")
 
               support_bundle = "vagrant scp :/vagrant/support-bundle.zip support-bundle.zip"
-              system(support_bundle) if Vagrant.has_plugin?("vagrant-scp")
+              system(support_bundle) if Vagrant.has_plugin?("vagrant-scp-sync")
               
               if File.exist?('.vagrant/provisioned-adapters.yml')
                 adapters_content = File.read('.vagrant/provisioned-adapters.yml')
@@ -518,7 +518,7 @@ class Hosts
                   if host['settings']['debug_build']
                     puts "#{ prefix } Transferring Hosts Template back to Host" 
                     id_transfer_cmd = "vagrant ssh -c 'cat /vagrant/ansible/Hosts.template.yml.SHI' > Hosts.template.yml.SHI"
-                    id_transfer_cmd = "vagrant scp :/vagrant/ansible/Hosts.template.yml.SHI Hosts.template.yml.SHI" if Vagrant.has_plugin?("vagrant-scp")
+                    id_transfer_cmd = "vagrant scp :/vagrant/ansible/Hosts.template.yml.SHI Hosts.template.yml.SHI" if Vagrant.has_plugin?("vagrant-scp-sync")
                     system(id_transfer_cmd)
                   end
 
@@ -526,7 +526,7 @@ class Hosts
                   if host['settings']['vagrant_insert_key']
                     puts "#{ prefix } Transferring New SSH key" 
                     id_transfer_cmd = "vagrant ssh -c 'cat /home/startcloud/.ssh/id_ssh_rsa' > #{host['settings']['vagrant_user_private_key_path']}"
-                    id_transfer_cmd = "vagrant scp :/home/startcloud/.ssh/id_ssh_rsa #{host['settings']['vagrant_user_private_key_path']}" if Vagrant.has_plugin?("vagrant-scp")
+                    id_transfer_cmd = "vagrant scp :/home/startcloud/.ssh/id_ssh_rsa #{host['settings']['vagrant_user_private_key_path']}" if Vagrant.has_plugin?("vagrant-scp-sync")
                     system(id_transfer_cmd)
                     system(%x(vagrant ssh -c "sed -i '/vagrantup/d' /home/startcloud/.ssh/id_ssh_rsa"))
                   end
