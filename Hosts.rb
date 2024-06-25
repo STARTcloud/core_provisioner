@@ -65,7 +65,7 @@ class Hosts
               ## Get the bridge device the user specifies, if none selected, we need to try our best to get the best one (for every OS: Mac, Windows, and Linux)
               bridge = network['bridge'] if defined?(network_bridge)
               bridge = get_bridge_interface(path_VBoxManage) if bridge.nil?
-
+              
               ## We then take those variables, and hopefully have the best connection to use and then pass it to vagrant so it can create the network adapters.
               if network['type'] == 'host'
                 server.vm.network "private_network",
@@ -73,6 +73,7 @@ class Hosts
                   ip: network['address'],
                   gateway: network['gateway'],
                   netmask: network['netmask'],
+                  prefix: IPAddr.new(network['netmask']).to_i.to_s(2).count("1"),
                   type: 'dhcp',
                   dhcp: network['dhcp4'],
                   dhcp4: network['dhcp4'], 
@@ -95,6 +96,7 @@ class Hosts
                   ip: network['address'],
                   gateway: network['gateway'],
                   netmask: network['netmask'],
+                  prefix: IPAddr.new(network['netmask']).to_i.to_s(2).count("1"),
                   dhcp: network['dhcp4'],
                   dhcp4: network['dhcp4'], 
                   dhcp6: network['dhcp6'],
