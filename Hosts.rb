@@ -426,16 +426,18 @@ class Hosts
       end
 
       # Hook to run after destroy to clean up artifacts.
-      config.trigger.after :destroy do |trigger|
-        trigger.info = "Deleting cached files"
-        files_to_delete = [
-          '.vagrant/done.txt',
-          '.vagrant/provisioned-adapters.yml',
-          'results.yml',
-          host['settings']['vagrant_user_private_key_path']
-        ]
-        trigger.ruby do
-          Hosts.delete_files(trigger, files_to_delete)
+      if provider == 'virtualbox'
+        config.trigger.after :destroy do |trigger|
+          trigger.info = "Deleting cached files"
+          files_to_delete = [
+            '.vagrant/done.txt',
+            '.vagrant/provisioned-adapters.yml',
+            'results.yml',
+            host['settings']['vagrant_user_private_key_path']
+          ]
+          trigger.ruby do
+            Hosts.delete_files(trigger, files_to_delete)
+          end
         end
       end
 
