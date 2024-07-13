@@ -34,7 +34,7 @@ class Hosts
         #server.ssh.password = host['settings']['vagrant_user_pass']
         default_ssh_key = "./core/ssh_keys/id_rsa"
         vagrant_ssh_key = host['settings']['vagrant_user_private_key_path']
-        server.ssh.private_key_path = File.exist?(vagrant_ssh_key) ? [vagrant_ssh_key, default_ssh_key] : default_ssh_key
+        server.ssh.private_key_path = vagrant_ssh_key && File.exist?(vagrant_ssh_key) ? [vagrant_ssh_key, default_ssh_key] : default_ssh_key
         server.ssh.insert_key = false # host['settings']['vagrant_insert_key'], Note we are no longer automatically forcing the key in via Vagrants SSH insertion function
         server.ssh.forward_agent = host['settings']['ssh_forward_agent']
         config.vm.communicator = :ssh
