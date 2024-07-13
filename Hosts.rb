@@ -238,6 +238,7 @@ class Hosts
             vm.os_type                              = host['settings']['os_type']
             vm.firmware_type                        = host['settings']['firmware_type']
             vm.setup_wait                           = host['settings']['setup_wait']
+            vm.on_demand_vnics                      = host['settings']['on_demand_vnics']
             vm.consoleport                          = host['settings']['consoleport']
             vm.consolehost                          = host['settings']['consolehost']
   
