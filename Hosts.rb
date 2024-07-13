@@ -24,7 +24,7 @@ class Hosts
         ENV['VAGRANT_NO_PARALLEL'] = 'no'
       end
 
-      provider = host['provider-type']
+      provider = host['settings']['provider-type']
       config.vm.define "#{host['settings']['server_id']}--#{host['settings']['hostname']}.#{host['settings']['domain']}" do |server|
         server.vm.box = host['settings']['box']
         config.vm.box_url = "#{host['settings']['box_url']}/#{host['settings']['box']}"
@@ -63,7 +63,7 @@ class Hosts
           ## Loop over each block, with an index so that we can use the ordering to specify interface number
           host['networks'].each_with_index do |network, netindex|
               ## Get the bridge device the user specifies, if none selected, we need to try our best to get the best one (for every OS: Mac, Windows, and Linux)
-              bridge = network['bridge'] if defined?(network_bridge)
+              bridge = network['bridge'] if defined?(network['bridge'])
               bridge = get_bridge_interface(path_VBoxManage) if bridge.nil?
 
               ## We then take those variables, and hopefully have the best connection to use and then pass it to vagrant so it can create the network adapters.
@@ -78,7 +78,7 @@ class Hosts
                   dhcp4: network['dhcp4'], 
                   dhcp6: network['dhcp6'],
                   auto_config: network['autoconf'],
-                  vmac: host['provider-type'] == 'virtualbox' ? network['mac'].tr(':', '') : network['mac'],
+                  vmac: provider == 'virtualbox' ? network['mac'].tr(':', '') : network['mac'],
                   mac: network['vmac'],
                   nic_type: network['nic_type'],
                   nic_number: netindex,
@@ -99,7 +99,7 @@ class Hosts
                   dhcp4: network['dhcp4'], 
                   dhcp6: network['dhcp6'],
                   auto_config: network['autoconf'],
-                  vmac: host['provider-type'] == 'virtualbox' ? network['mac'].tr(':', '') : network['mac'],
+                  vmac: provider == 'virtualbox' ? network['mac'].tr(':', '') : network['mac'],
                   mac: network['vmac'],
                   nic_type: network['nic_type'],
                   nic_number: netindex,
@@ -119,7 +119,7 @@ class Hosts
         
         ## Create Disks
         config.trigger.before :up do |trigger|
-          if host.has_key?('disks') and !host['disks'].empty?
+          if host.has_key?('disks') and !host['disks'].empty? and provider == 'virtualbox'
             trigger.name = "Creating disks"
             trigger.ruby do
               unless File.directory?(disks_directory)
@@ -140,7 +140,7 @@ class Hosts
         end
 
         # Create storage controller on first run
-        if host.has_key?('disks') and !host['disks'].empty?
+        if host.has_key?('disks') and !host['disks'].empty? and provider == 'virtualbox'
           unless File.directory?(disks_directory)
             config.vm.provider "virtualbox" do |storage_provider|
               storage_provider.customize ["storagectl", :id, "--name", "Virtual I/O Device SCSI controller", "--add", "virtio-scsi", '--hostiocache', 'off']
@@ -149,7 +149,7 @@ class Hosts
         end
 
         # attach storage devices
-        if host.has_key?('disks') and !host['disks'].empty?
+        if host.has_key?('disks') and !host['disks'].empty? and provider == 'virtualbox'
           config.vm.provider "virtualbox" do |storage_provider|
             host['disks']['additional_disks'].each_with_index do |disks, diskindex|
               local_disk_filename = File.join(disks_directory, "#{disks['volume_name']}.vdi")
@@ -162,7 +162,7 @@ class Hosts
 
         # Cleanup Disks after "destroy" action
         config.trigger.after :destroy do |trigger|
-          if host.has_key?('disks') and !host['disks'].empty?
+          if host.has_key?('disks') and !host['disks'].empty? and provider == 'virtualbox'
             trigger.name = "Cleanup operation"
             trigger.ruby do
               # the following loop is now obsolete as these files will be removed automatically as machine dependency
@@ -221,7 +221,7 @@ class Hosts
         ##### End Virtualbox Configurations #####
 
         ##### Begin ZONE type Configurations #####
-        if host['provider-type'] == 'zone'
+        if provider == 'zones'
           server.vm.provider :zone do |vm|
             vm.hostname                             = "#{host['settings']['subdomain']}.#{host['settings']['domain']}"
             vm.name                                 = "#{host['settings']['partition_id']}--#{host['settings']['subdomain']}.#{host['settings']['domain']}"
@@ -539,7 +539,7 @@ class Hosts
         end
       end
 
-      if host['zones'] && host['zones'].has_key?('post_provision_boot') && host['zones']['post_provision_boot'] && host['settings']['provider-type'] == 'zone'
+      if host['zones'] && host['zones'].has_key?('post_provision_boot') && host['zones']['post_provision_boot'] && host['settings']['provider-type'] == 'zones'
         config.trigger.after [:up, :provision] do |trigger|
           trigger.info = "post_provision_boot is true, Waiting for instance to stop"
           trigger.ruby do |env, machine|
@@ -583,11 +583,11 @@ class Hosts
     bridge = nil
     pairs.each do |active_interface|
       if Vagrant::Util::Platform.windows?
-        bridge = active_interface if !defroute.nil? && active_interface.start_with?(defroute.to_s) && !defined?(network_bridge)
+        bridge = active_interface if !defroute.nil? && active_interface.start_with?(defroute.to_s) && !defined?(network['bridge'])
       elsif Vagrant::Util::Platform.linux?
-        bridge = active_interface if !defroute[7].nil? && active_interface.start_with?(defroute[7]) && !defined?(network_bridge)
+        bridge = active_interface if !defroute[7].nil? && active_interface.start_with?(defroute[7]) && !defined?(network['bridge'])
       elsif Vagrant::Util::Platform.darwin?
-        bridge = active_interface if !defroute[3].nil? && active_interface.start_with?(defroute[3]) && !defined?(network_bridge)
+        bridge = active_interface if !defroute[3].nil? && active_interface.start_with?(defroute[3]) && !defined?(network['bridge'])
       end
     end
 
