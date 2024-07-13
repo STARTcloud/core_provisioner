@@ -62,9 +62,6 @@ class Hosts
 
           ## Loop over each block, with an index so that we can use the ordering to specify interface number
           host['networks'].each_with_index do |network, netindex|
-              # Compute mac once, only modify if provider is virtualbox
-              mac_address = provider == 'virtualbox' ? network['mac'].tr(':', '') : network['mac']
-
               ## Get the bridge device the user specifies, if none selected, we need to try our best to get the best one (for every OS: Mac, Windows, and Linux)
               bridge = network['bridge'] if defined?(network['bridge'])
               bridge = get_bridge_interface(path_VBoxManage) if bridge.nil? && provider == 'virtualbox'
@@ -81,7 +78,7 @@ class Hosts
                   dhcp4: network['dhcp4'], 
                   dhcp6: network['dhcp6'],
                   auto_config: network['autoconf'],
-                  mac: mac_address,
+                  mac: provider == 'virtualbox' ? network['mac'].tr(':', '') : network['mac'],
                   nic_type: network['nic_type'],
                   nic_number: netindex,
                   managed: network['is_control'],
@@ -101,7 +98,7 @@ class Hosts
                   dhcp4: network['dhcp4'], 
                   dhcp6: network['dhcp6'],
                   auto_config: network['autoconf'],
-                  mac: mac_address,
+                  mac: provider == 'virtualbox' ? network['mac'].tr(':', '') : network['mac'],
                   nic_type: network['nic_type'],
                   nic_number: netindex,
                   managed: network['is_control'],
