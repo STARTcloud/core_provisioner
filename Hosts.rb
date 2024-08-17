@@ -238,7 +238,6 @@ class Hosts
             vm.os_type                              = host['settings']['os_type']
             vm.firmware_type                        = host['settings']['firmware_type']
             vm.setup_wait                           = host['settings']['setup_wait']
-            vm.on_demand_vnics                      = host['settings']['on_demand_vnics']
             vm.consoleport                          = host['settings']['consoleport']
             vm.consolehost                          = host['settings']['consolehost']
   
@@ -284,6 +283,7 @@ class Hosts
             vm.safe_restart                         = host['zones']['safe_restart']
             vm.safe_shutdown                        = host['zones']['safe_shutdown']
             vm.setup_method                         = host['zones']['setup_method']
+            vm.on_demand_vnics                      = host['zones']['on_demand_vnics']
           end
         end
         ## End Vagrant-Zones Configurations
