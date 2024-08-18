@@ -233,7 +233,7 @@ class Hosts
             vm.cloud_init_password                  = host['settings']['vagrant_user_pass']
             vm.vagrant_user_private_key_path        = host['settings']['vagrant_user_private_key_path']
             vm.vagrant_user                         = host['settings']['vagrant_user']
-            vm.vagrant_user_pass                    = host['zones']['user_pass']
+            vm.vagrant_user_pass                    = host['settings']['vagrant_user_pass']
   
             vm.os_type                              = host['settings']['os_type']
             vm.firmware_type                        = host['settings']['firmware_type']
