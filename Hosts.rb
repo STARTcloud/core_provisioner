@@ -18,7 +18,7 @@ class Hosts
     # Main loop to configure VM
     settings['hosts'].each_with_index do |host, index|
       configure_plugins(host)
-      
+
       ENV['VAGRANT_NO_PARALLEL'] = 'yes'
       if host['settings'].has_key?('parallel') && host['settings']['parallel']
         ENV['VAGRANT_NO_PARALLEL'] = 'no'
@@ -44,7 +44,7 @@ class Hosts
         config.winrm.retry_delay = 30
         config.winrm.retry_limit = 1000
 
-        if Vagrant::Util::Platform.windows?  || Vagrant::Util::Platform.cygwin? || Vagrant::Util::Platform.wsl? 
+        if Vagrant::Util::Platform.windows?  || Vagrant::Util::Platform.cygwin? || Vagrant::Util::Platform.wsl?
           path_VBoxManage = "VBoxManage.exe"
         elsif Vagrant::Util::Platform.darwin? || Vagrant::Util::Platform.linux?  || Vagrant::Util::Platform.bsd? || Vagrant::Util::Platform.solaris?
           path_VBoxManage = "VBoxManage"
@@ -55,10 +55,11 @@ class Hosts
         if host.has_key?('networks') and !host['networks'].empty?
           ## This tells Virtualbox to set the Nat network so that we can avoid IP conflicts and more easily identify networks
           ## This Nic cannot be removed which is why its not in the loop below
-          config.vm.provider "virtualbox" do |network_provider|
+#          server.vm.provider :virtualbox do |network_provider|
             # https://github.com/Moonshine-IDE/Super.Human.Installer/issues/116
-            network_provider.customize ['modifyvm', :id, '--natnet1', '10.244.244.0/24']
-          end
+            #system("#{path_VBoxManage} natnetwork add --netname core_provisioner_network --network '10.244.244.0/24' --enable --dhcp on")
+#            network_provider.customize ['modifyvm', :id, '--nic1', 'nat', '--natnet1', 'core_provisioner_network']
+#          end
 
           ## Loop over each block, with an index so that we can use the ordering to specify interface number
           host['networks'].each_with_index do |network, netindex|
@@ -75,7 +76,7 @@ class Hosts
                   netmask: network['netmask'],
                   type: 'dhcp',
                   dhcp: network['dhcp4'],
-                  dhcp4: network['dhcp4'], 
+                  dhcp4: network['dhcp4'],
                   dhcp6: network['dhcp6'],
                   auto_config: network['autoconf'],
                   mac: provider == 'virtualbox' ? network['mac'].tr(':', '') : network['mac'],
@@ -96,7 +97,7 @@ class Hosts
                   gateway: network['gateway'],
                   netmask: network['netmask'],
                   dhcp: network['dhcp4'],
-                  dhcp4: network['dhcp4'], 
+                  dhcp4: network['dhcp4'],
                   dhcp6: network['dhcp6'],
                   auto_config: network['autoconf'],
                   mac: provider == 'virtualbox' ? network['mac'].tr(':', '') : network['mac'],
@@ -116,45 +117,24 @@ class Hosts
         ##### Disk Configurations #####
         ## https://sleeplessbeastie.eu/2021/05/10/how-to-define-multiple-disks-inside-vagrant-using-virtualbox-provider/
         disks_directory = File.join("./", "disks")
-        
+
         ## Create Disks
         config.trigger.before :up do |trigger|
-          if host.has_key?('disks') and !host['disks'].empty? and provider == 'virtualbox'
+          if host.has_key?('disks') && host['disks'].is_a?(Hash) && host['disks'].has_key?('additional_disks') && !host['disks']['additional_disks'].nil? && provider == 'virtualbox'
             trigger.name = "Creating disks"
             trigger.ruby do
               unless File.directory?(disks_directory)
                 FileUtils.mkdir_p(disks_directory)
               end
-              
-              host['disks']['additional_disks'].each_with_index do |disks, diskindex|
-                local_disk_filename = File.join(disks_directory, "#{disks['volume_name']}.vdi")
+
+              host['disks']['additional_disks'].each_with_index do |disk, diskindex|
+                local_disk_filename = File.join(disks_directory, "#{disk['volume_name']}.vdi")
                 unless File.exist?(local_disk_filename)
-                  disk_size_gb = disks['size'].match(/(\d+(\.\d+)?)/)[0].to_f
+                  disk_size_gb = disk['size'].match(/(\d+(\.\d+)?)/)[0].to_f
                   disk_size_mb = (disk_size_gb * 1024).to_i
-                  puts "Creating \"#{disks['volume_name']}\" disk with size \"#{disk_size_mb}\" MB (#{disk_size_gb} GB)"
+                  puts "Creating \"#{disk['volume_name']}\" disk with size \"#{disk_size_mb}\" MB (#{disk_size_gb} GB)"
                   system("#{path_VBoxManage} createmedium --filename #{local_disk_filename} --size #{disk_size_mb} --format VDI")
                 end
-              end
-            end  
-          end
-        end
-
-        # Create storage controller on first run
-        if host.has_key?('disks') and !host['disks'].empty? and provider == 'virtualbox'
-          unless File.directory?(disks_directory)
-            config.vm.provider "virtualbox" do |storage_provider|
-              storage_provider.customize ["storagectl", :id, "--name", "Virtual I/O Device SCSI controller", "--add", "virtio-scsi", '--hostiocache', 'off']
-            end
-          end
-        end
-
-        # attach storage devices
-        if host.has_key?('disks') and !host['disks'].empty? and provider == 'virtualbox'
-          config.vm.provider "virtualbox" do |storage_provider|
-            host['disks']['additional_disks'].each_with_index do |disks, diskindex|
-              local_disk_filename = File.join(disks_directory, "#{disks['volume_name']}.vdi")
-              unless File.exist?(local_disk_filename)
-                storage_provider.customize ['storageattach', :id, '--storagectl', "Virtual I/O Device SCSI controller", '--port', disks['port'], '--device', 0, '--type', 'hdd', '--medium', local_disk_filename]
               end
             end
           end
@@ -162,7 +142,7 @@ class Hosts
 
         # Cleanup Disks after "destroy" action
         config.trigger.after :destroy do |trigger|
-          if host.has_key?('disks') and !host['disks'].empty? and provider == 'virtualbox'
+          if host.has_key?('disks') && host['disks'].is_a?(Hash) && host['disks'].has_key?('additional_disks') && !host['disks']['additional_disks'].nil? && provider == 'virtualbox'
             trigger.name = "Cleanup operation"
             trigger.ruby do
               # the following loop is now obsolete as these files will be removed automatically as machine dependency
@@ -181,10 +161,10 @@ class Hosts
         end
 
         server.vm.provider :virtualbox do |vb|
-          if host['settings']['memory'] =~ /gb|g|/
-            host['settings']['memory']= 1024 * host['settings']['memory'].tr('^0-9', '').to_i
+          if host['settings']['memory'].to_s =~ /gb|g|/
+            vm_memory = 1024 * host['settings']['memory'].to_s.tr('^0-9', '').to_i
           elsif host['settings']['memory'] =~ /mb|m|/
-            host['settings']['memory']= host['settings']['memory'].tr('^0-9', '')
+            vm_memory = host['settings']['memory'].tr('^0-9', '')
           end
           vb.name = "#{host['settings']['server_id']}--#{host['settings']['hostname']}.#{host['settings']['domain']}"
           vb.gui = host['settings']['show_console']
@@ -192,14 +172,14 @@ class Hosts
           vb.customize ["modifyvm", :id, "--vrdeport", host['settings']['consoleport']]
           vb.customize ["modifyvm", :id, "--vrdeaddress", host['settings']['consolehost']]
           vb.customize ["modifyvm", :id, "--cpus", host['settings']['vcpus']]
-          vb.customize ["modifyvm", :id, "--memory", host['settings']['memory']]
+          vb.customize ["modifyvm", :id, "--memory", vm_memory ]
           vb.customize ["modifyvm", :id, "--firmware", 'efi'] if host['settings']['firmware_type'] == 'UEFI'
           vb.customize ['modifyvm', :id, "--vrde", 'on']
           vb.customize ['modifyvm', :id, "--natdnsproxy1", 'off']
           vb.customize ['modifyvm', :id, "--natdnshostresolver1", 'off']
           vb.customize ['modifyvm', :id, "--accelerate3d", 'off']
           vb.customize ['modifyvm', :id, "--vram", '256']
-          
+
           if host.has_key?('roles') and !host['roles'].empty?
             host['roles'].each do |rolefwds|
               if rolefwds.has_key?('port_forwards') and !rolefwds.empty?
@@ -212,7 +192,7 @@ class Hosts
 
           if host.has_key?('vbox') and !host['vbox'].empty?
             if host['vbox'].has_key?('directives') and !host['vbox']['directives'].empty?
-              host['vbox']['directives'].each do |param|              
+              host['vbox']['directives'].each do |param|
                 vb.customize ['modifyvm', :id, "--#{param['directive']}", param['value']]
               end
             end
@@ -226,29 +206,29 @@ class Hosts
             vm.hostname                             = "#{host['settings']['subdomain']}.#{host['settings']['domain']}"
             vm.name                                 = "#{host['settings']['partition_id']}--#{host['settings']['subdomain']}.#{host['settings']['domain']}"
             vm.partition_id                         = host['settings']['server_id']
-  
+
             vm.vagrant_cloud_creator                = host['settings']['cloud_creator']
             vm.boxshortname                         = host['settings']['boxshortname']
-  
+
             vm.cloud_init_password                  = host['settings']['vagrant_user_pass']
             vm.vagrant_user_private_key_path        = host['settings']['vagrant_user_private_key_path']
             vm.vagrant_user                         = host['settings']['vagrant_user']
             vm.vagrant_user_pass                    = host['settings']['vagrant_user_pass']
-  
+
             vm.os_type                              = host['settings']['os_type']
             vm.firmware_type                        = host['settings']['firmware_type']
             vm.setup_wait                           = host['settings']['setup_wait']
             vm.consoleport                          = host['settings']['consoleport']
             vm.consolehost                          = host['settings']['consolehost']
-  
+
             vm.memory                               = host['settings']['memory']
             vm.cpus                                 = host['settings']['vcpus']
             vm.dns                                  = host['networks']
-  
+
             vm.boot                                 = host['disks']['boot']
             vm.additional_disks                     = host['disks']['additional_disks']
             vm.cdroms                               = host['disks']['cdroms']
-  
+
             vm.autoboot                             = host['zones']['autostart']
             vm.brand                                = host['zones']['brand']
             vm.zunlockbootkey                       = host['zones']['zunlockbootkey']
@@ -294,22 +274,22 @@ class Hosts
 
         # Register shared folders
         if host.has_key?('folders')
-					host['folders'].each do |folder|
-						mount_opts = folder['type'] == folder['type'] ? ['actimeo=1'] : []
-						server.vm.synced_folder folder['map'], folder ['to'],
-						type: folder['type'],
-						owner: folder['owner'] ||= host['settings']['vagrant_user'],
-						group: folder['group'] ||= host['settings']['vagrant_user'],
-						mount_options: mount_opts,
-						automount: true,
+          host['folders'].each do |folder|
+            mount_opts = folder['type'] == folder['type'] ? ['actimeo=1'] : []
+            server.vm.synced_folder folder['map'], folder ['to'],
+            type: folder['type'],
+            owner: folder['owner'] ||= host['settings']['vagrant_user'],
+            group: folder['group'] ||= host['settings']['vagrant_user'],
+            mount_options: mount_opts,
+            automount: true,
             rsync__args: folder['args'] ||= ["--verbose", "--archive", "-z", "--copy-links"],
-						rsync__chown: folder['chown'] ||= 'false',
-            create: folder['create'] ||= 'false',
-						rsync__rsync_ownership: folder['rsync_ownership'] ||= 'true',
-						disabled: folder['disabled']||= false
-					end
-				end
-        
+            rsync__chown: folder['chown'] ||= 'false',
+            create: 'false',
+            rsync__rsync_ownership: folder['rsync_ownership'] ||= 'true',
+            disabled: folder['disabled'] ||= false
+          end
+        end
+
         # Begin Provisioning Sequences
         if host.has_key?('provisioning') and !host['provisioning'].nil?
           # Add Branch Files to Vagrant Share on VM Change to Git folders to pull
@@ -320,14 +300,14 @@ class Hosts
               s.args = [host['provisioning']['role']['name'], host['provisioning']['role']['git_url'] ]
             end
           end
-  
+
           # Run the shell provisioners defined in hosts.yml
           if host['provisioning'].has_key?('shell') && host['provisioning']['shell']['enabled']
             host['provisioning']['shell']['scripts'].each do |file|
                 server.vm.provision 'shell', path: file
             end
           end
-  
+
           # Run the Ansible Provisioners -- You can pass Host.yaml variables to Ansible via the Extra_vars variable as noted below.
           ## If Ansible is not available on the host and is installed in the template you are spinning up, use 'ansible-local'
           if host['provisioning'].has_key?('ansible') && host['provisioning']['ansible']['enabled']
@@ -372,7 +352,7 @@ class Hosts
                   end
                 end
               end
-  
+
               ## If Ansible is available on the host or is not installed in the template you are spinning up, use 'ansible'
               if playbooks.has_key?('remote')
                 playbooks['remote'].each do |remoteplaybook|
@@ -415,7 +395,7 @@ class Hosts
               end
             end
           end
-  
+
           # Run the Docker-Compose provisioners defined in hosts.yml
           if host['provisioning'].has_key?('docker') && host['provisioning']['docker']['enabled']
             server.vm.provision 'docker'
@@ -473,8 +453,8 @@ class Hosts
               puts "#{ prefix } https://github.com/STARTcloud/core_provisioner/releases/tag/v#{CoreProvisioner::VERSION}"
               puts "#{ prefix } This server has been provisioned with #{Provisioner::NAME} v#{Provisioner::VERSION}"
               puts "#{ prefix } https://github.com/STARTcloud/#{Provisioner::NAME}/releases/tag/v#{Provisioner::VERSION}"
-              
-              puts "#{ prefix } Transferring Debugging files back to Host" 
+
+              puts "#{ prefix } Transferring Debugging files back to Host"
               transfer_cmd = "vagrant scp :/vagrant/support-bundle/adapters.yml .vagrant/provisioned-adapters.yml"
               transfer_cmd = "vagrant ssh -c 'cat /vagrant/support-bundle/adapters.yml' > .vagrant/provisioned-adapters.yml" if not Vagrant.has_plugin?("vagrant-scp-sync")
               system(transfer_cmd)
@@ -484,7 +464,7 @@ class Hosts
 
               support_bundle = "vagrant scp :/vagrant/support-bundle.zip support-bundle.zip"
               system(support_bundle) if Vagrant.has_plugin?("vagrant-scp-sync")
-              
+
               if File.exist?('.vagrant/provisioned-adapters.yml')
                 adapters_content = File.read('.vagrant/provisioned-adapters.yml')
                 begin
@@ -497,15 +477,15 @@ class Hosts
                 if adapters && adapters.is_a?(Hash) && adapters.key?('adapters')
                   public_adapter = adapters['adapters'].find { |adapter| adapter['name'] == 'public_adapter' }
                   nat_adapter = adapters['adapters'].find { |adapter| adapter['name'] == 'nat_adapter' }
-      
+
                   ip_address = public_adapter&.fetch('ip') || nat_adapter&.fetch('ip')
 
                   open_url = "https://#{ip_address.split('/').first}:443/welcome.html"
-          
+
                   adapters['adapters'].each do |adapter_hash|
                     adapter_hash.transform_keys!(&:to_s)
                   end
-          
+
                   output_data = {
                     'open_url' => open_url,
                     'adapters' => adapters['adapters']
@@ -513,13 +493,13 @@ class Hosts
                   puts "#{ prefix } Network Information Can be found here: "
                   puts "#{ prefix }     #{File.join(Dir.pwd, 'results.yml')}"
                   Hosts.write_results_file(output_data, 'results.yml', true)
-                  puts "#{ prefix } You can access the Welcome Page Here: " 
+                  puts "#{ prefix } You can access the Welcome Page Here: "
                   puts "#{ prefix }     #{ open_url }"
                   system("echo '" + open_url + "' > .vagrant/done.txt")
-                  
+
                   ## For CI/CD Automation Purposes Only
                   if host['settings']['debug_build']
-                    puts "#{ prefix } Transferring Hosts Template back to Host" 
+                    puts "#{ prefix } Transferring Hosts Template back to Host"
                     id_transfer_cmd = "vagrant ssh -c 'cat /vagrant/ansible/Hosts.template.yml.SHI' > Hosts.template.yml.SHI"
                     id_transfer_cmd = "vagrant scp :/vagrant/ansible/Hosts.template.yml.SHI Hosts.template.yml.SHI" if Vagrant.has_plugin?("vagrant-scp-sync")
                     system(id_transfer_cmd)
@@ -527,7 +507,7 @@ class Hosts
 
                   ## Copy the Updated Key from the VM, and then Delete the default Template Key from the VM
                   if host['settings']['vagrant_insert_key']
-                    puts "#{ prefix } Transferring New SSH key" 
+                    puts "#{ prefix } Transferring New SSH key"
                     id_transfer_cmd = "vagrant ssh -c 'cat /home/startcloud/.ssh/id_ssh_rsa' > #{host['settings']['vagrant_user_private_key_path']}"
                     id_transfer_cmd = "vagrant scp :/home/startcloud/.ssh/id_ssh_rsa #{host['settings']['vagrant_user_private_key_path']}" if Vagrant.has_plugin?("vagrant-scp-sync")
                     system(id_transfer_cmd)
@@ -599,16 +579,16 @@ class Hosts
 
   def self.load_secrets
     secrets_path = "#{File.dirname(__FILE__)}/../.secrets.yml"
-    YAML.load(File.read(secrets_path)) if File.exists?(secrets_path)
+    YAML.load(File.read(secrets_path)) if File.file?(secrets_path)
   end
 
   def self.configure_plugins(host)
     plugins = Array(host['plugins'])
     return if plugins.empty?
-  
+
     plugins.each do |plugin|
       next if Vagrant.has_plugin?(plugin)
-  
+
       system("vagrant plugin install #{plugin}")
       exit system('vagrant', *ARGV)
     end
