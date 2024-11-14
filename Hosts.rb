@@ -119,7 +119,7 @@ class Hosts
 
         ## Create Disks
         config.trigger.before :up do |trigger|
-          if host.has_key?('disks') and !host['disks'].empty?
+          if host.has_key?('disks') && host['disks'].is_a?(Hash) && host['disks'].has_key?('additional_disks') && !host['disks']['additional_disks'].nil? && provider == 'virtualbox'
             trigger.name = "Creating disks"
             trigger.ruby do
               unless File.directory?(disks_directory)
