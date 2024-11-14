@@ -34,7 +34,7 @@ class Hosts
         #server.ssh.password = host['settings']['vagrant_user_pass']
         default_ssh_key = "./core/ssh_keys/id_rsa"
         vagrant_ssh_key = host['settings']['vagrant_user_private_key_path']
-        server.ssh.private_key_path = vagrant_ssh_key && File.exist?(vagrant_ssh_key) ? [vagrant_ssh_key, default_ssh_key] : default_ssh_key
+        server.ssh.private_key_path = File.exist?(vagrant_ssh_key) ? [vagrant_ssh_key, default_ssh_key] : default_ssh_key
         server.ssh.insert_key = false # host['settings']['vagrant_insert_key'], Note we are no longer automatically forcing the key in via Vagrants SSH insertion function
         server.ssh.forward_agent = host['settings']['ssh_forward_agent']
         config.vm.communicator = :ssh
@@ -55,17 +55,16 @@ class Hosts
         if host.has_key?('networks') and !host['networks'].empty?
           ## This tells Virtualbox to set the Nat network so that we can avoid IP conflicts and more easily identify networks
           ## This Nic cannot be removed which is why its not in the loop below
-#          server.vm.provider :virtualbox do |network_provider|
-            # https://github.com/Moonshine-IDE/Super.Human.Installer/issues/116
-            #system("#{path_VBoxManage} natnetwork add --netname core_provisioner_network --network '10.244.244.0/24' --enable --dhcp on")
-#            network_provider.customize ['modifyvm', :id, '--nic1', 'nat', '--natnet1', 'core_provisioner_network']
+#          config.vm.provider "virtualbox" do |network_provider|
+#            # https://github.com/Moonshine-IDE/Super.Human.Installer/issues/116
+#            network_provider.customize ['modifyvm', :id, '--natnet1', '10.244.244.0/24']
 #          end
 
           ## Loop over each block, with an index so that we can use the ordering to specify interface number
           host['networks'].each_with_index do |network, netindex|
               ## Get the bridge device the user specifies, if none selected, we need to try our best to get the best one (for every OS: Mac, Windows, and Linux)
-              bridge = network['bridge'] if defined?(network['bridge'])
-              bridge = get_bridge_interface(path_VBoxManage) if bridge.nil? && provider == 'virtualbox'
+              bridge = network['bridge'] if defined?(network_bridge)
+              bridge = get_bridge_interface(path_VBoxManage) if bridge.nil?
 
               ## We then take those variables, and hopefully have the best connection to use and then pass it to vagrant so it can create the network adapters.
               if network['type'] == 'host'
@@ -79,9 +78,9 @@ class Hosts
                   dhcp4: network['dhcp4'],
                   dhcp6: network['dhcp6'],
                   auto_config: network['autoconf'],
-                  mac: provider == 'virtualbox' ? network['mac'].tr(':', '') : network['mac'],
+                  vmac: host['provider-type'] == 'virtualbox' ? network['mac'].tr(':', '') : network['mac'],
+                  mac: network['vmac'],
                   nic_type: network['nic_type'],
-                  nictype: network['type'],
                   nic_number: netindex,
                   managed: network['is_control'],
                   vlan: network['vlan'],
@@ -100,9 +99,9 @@ class Hosts
                   dhcp4: network['dhcp4'],
                   dhcp6: network['dhcp6'],
                   auto_config: network['autoconf'],
-                  mac: provider == 'virtualbox' ? network['mac'].tr(':', '') : network['mac'],
+                  vmac: host['provider-type'] == 'virtualbox' ? network['mac'].tr(':', '') : network['mac'],
+                  mac: network['vmac'],
                   nic_type: network['nic_type'],
-                  nictype: network['type'],
                   nic_number: netindex,
                   managed: network['is_control'],
                   vlan: network['vlan'],
@@ -120,21 +119,42 @@ class Hosts
 
         ## Create Disks
         config.trigger.before :up do |trigger|
-          if host.has_key?('disks') && host['disks'].is_a?(Hash) && host['disks'].has_key?('additional_disks') && !host['disks']['additional_disks'].nil? && provider == 'virtualbox'
+          if host.has_key?('disks') and !host['disks'].empty?
             trigger.name = "Creating disks"
             trigger.ruby do
               unless File.directory?(disks_directory)
                 FileUtils.mkdir_p(disks_directory)
               end
 
-              host['disks']['additional_disks'].each_with_index do |disk, diskindex|
-                local_disk_filename = File.join(disks_directory, "#{disk['volume_name']}.vdi")
+              host['disks']['additional_disks'].each_with_index do |disks, diskindex|
+                local_disk_filename = File.join(disks_directory, "#{disks['volume_name']}.vdi")
                 unless File.exist?(local_disk_filename)
-                  disk_size_gb = disk['size'].match(/(\d+(\.\d+)?)/)[0].to_f
+                  disk_size_gb = disks['size'].match(/(\d+(\.\d+)?)/)[0].to_f
                   disk_size_mb = (disk_size_gb * 1024).to_i
-                  puts "Creating \"#{disk['volume_name']}\" disk with size \"#{disk_size_mb}\" MB (#{disk_size_gb} GB)"
+                  puts "Creating \"#{disks['volume_name']}\" disk with size \"#{disk_size_mb}\" MB (#{disk_size_gb} GB)"
                   system("#{path_VBoxManage} createmedium --filename #{local_disk_filename} --size #{disk_size_mb} --format VDI")
                 end
+              end
+            end
+          end
+        end
+
+        # Create storage controller on first run
+        if host.has_key?('disks') && host['disks'].is_a?(Hash) && host['disks'].has_key?('additional_disks') && !host['disks']['additional_disks'].nil? && provider == 'virtualbox'
+          unless File.directory?(disks_directory)
+            config.vm.provider "virtualbox" do |storage_provider|
+              storage_provider.customize ["storagectl", :id, "--name", "Virtual I/O Device SCSI controller", "--add", "virtio-scsi", '--hostiocache', 'off']
+            end
+          end
+        end
+
+        # attach storage devices
+        if host.has_key?('disks') && host['disks'].is_a?(Hash) && host['disks'].has_key?('additional_disks') && !host['disks']['additional_disks'].nil? && provider == 'virtualbox'
+          config.vm.provider "virtualbox" do |storage_provider|
+            host['disks']['additional_disks'].each_with_index do |disks, diskindex|
+              local_disk_filename = File.join(disks_directory, "#{disks['volume_name']}.vdi")
+              unless File.exist?(local_disk_filename)
+                storage_provider.customize ['storageattach', :id, '--storagectl', "Virtual I/O Device SCSI controller", '--port', disks['port'], '--device', 0, '--type', 'hdd', '--medium', local_disk_filename]
               end
             end
           end
@@ -201,7 +221,7 @@ class Hosts
         ##### End Virtualbox Configurations #####
 
         ##### Begin ZONE type Configurations #####
-        if provider == 'zones'
+        if host['provider-type'] == 'zone'
           server.vm.provider :zone do |vm|
             vm.hostname                             = "#{host['settings']['subdomain']}.#{host['settings']['domain']}"
             vm.name                                 = "#{host['settings']['partition_id']}--#{host['settings']['subdomain']}.#{host['settings']['domain']}"
@@ -263,7 +283,6 @@ class Hosts
             vm.safe_restart                         = host['zones']['safe_restart']
             vm.safe_shutdown                        = host['zones']['safe_shutdown']
             vm.setup_method                         = host['zones']['setup_method']
-            vm.on_demand_vnics                      = host['zones']['on_demand_vnics']
           end
         end
         ## End Vagrant-Zones Configurations
@@ -409,18 +428,16 @@ class Hosts
       end
 
       # Hook to run after destroy to clean up artifacts.
-      if provider == 'virtualbox'
-        config.trigger.after :destroy do |trigger|
-          trigger.info = "Deleting cached files"
-          files_to_delete = [
-            '.vagrant/done.txt',
-            '.vagrant/provisioned-adapters.yml',
-            'results.yml',
-            host['settings']['vagrant_user_private_key_path']
-          ]
-          trigger.ruby do
-            Hosts.delete_files(trigger, files_to_delete)
-          end
+      config.trigger.after :destroy do |trigger|
+        trigger.info = "Deleting cached files"
+        files_to_delete = [
+          '.vagrant/done.txt',
+          '.vagrant/provisioned-adapters.yml',
+          'results.yml',
+          host['settings']['vagrant_user_private_key_path']
+        ]
+        trigger.ruby do
+          Hosts.delete_files(trigger, files_to_delete)
         end
       end
 
@@ -522,7 +539,7 @@ class Hosts
         end
       end
 
-      if host['zones'] && host['zones'].has_key?('post_provision_boot') && host['zones']['post_provision_boot'] && host['settings']['provider-type'] == 'zones'
+      if host['zones'] && host['zones'].has_key?('post_provision_boot') && host['zones']['post_provision_boot'] && host['settings']['provider-type'] == 'zone'
         config.trigger.after [:up, :provision] do |trigger|
           trigger.info = "post_provision_boot is true, Waiting for instance to stop"
           trigger.ruby do |env, machine|
@@ -566,11 +583,11 @@ class Hosts
     bridge = nil
     pairs.each do |active_interface|
       if Vagrant::Util::Platform.windows?
-        bridge = active_interface if !defroute.nil? && active_interface.start_with?(defroute.to_s) && !defined?(network['bridge'])
+        bridge = active_interface if !defroute.nil? && active_interface.start_with?(defroute.to_s) && !defined?(network_bridge)
       elsif Vagrant::Util::Platform.linux?
-        bridge = active_interface if !defroute[7].nil? && active_interface.start_with?(defroute[7]) && !defined?(network['bridge'])
+        bridge = active_interface if !defroute[7].nil? && active_interface.start_with?(defroute[7]) && !defined?(network_bridge)
       elsif Vagrant::Util::Platform.darwin?
-        bridge = active_interface if !defroute[3].nil? && active_interface.start_with?(defroute[3]) && !defined?(network['bridge'])
+        bridge = active_interface if !defroute[3].nil? && active_interface.start_with?(defroute[3]) && !defined?(network_bridge)
       end
     end
 
