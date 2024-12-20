@@ -27,13 +27,13 @@ class Hosts
       if host['settings'].has_key?('parallel') && host['settings']['parallel']
         ENV['VAGRANT_NO_PARALLEL'] = 'no'
       end
-
-      ENV['VAGRANT_SERVER_URL'] = secrets['vagrant_server_url'] if host['settings'].has_key?('vagrant_server_url') && !host['settings']['vagrant_server_url'].empty?
+      
+      ENV['VAGRANT_SERVER_URL'] = host['settings']['box_url'] if host['settings'].has_key?('box_url')
 
       provider = host['settings']['provider-type']
       config.vm.define "#{host['settings']['server_id']}--#{host['settings']['hostname']}.#{host['settings']['domain']}" do |server|
         server.vm.box = host['settings']['box']
-        config.vm.box_url = "#{host['settings']['box_url']}/#{host['settings']['box']}"
+        config.vm.box_url = host['settings']['box_url'].to_s.empty? ? "https://vagrantcloud.com/#{host['settings']['box']}" : "#{host['settings']['box_url']}/#{host['settings']['box']}"
         server.vm.box_version = host['settings']['box_version']
         server.vm.boot_timeout = host['settings']['setup_wait']
         server.ssh.username = host['settings']['vagrant_user']
