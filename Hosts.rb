@@ -346,6 +346,7 @@ class Hosts
                     else
                       :once
                     end
+
                   server.vm.provision :ansible_local, run: run_value do |ansible|
                     ansible.playbook = localplaybook['playbook']
                     ansible.compatibility_mode = localplaybook['compatibility_mode'].to_s
@@ -603,8 +604,8 @@ class Hosts
 
   def self.load_secrets
     secrets_dir = File.dirname(__FILE__)
-    secrets_path = File.join(secrets_dir, 'secrets.yml')
-    hidden_secrets_path = File.join(secrets_dir, '.secrets.yml')
+    secrets_path = File.join(secrets_dir, '../secrets.yml')
+    hidden_secrets_path = File.join(secrets_dir, '../.secrets.yml')
     
     secrets = {}
     
