@@ -5,6 +5,7 @@ require 'open3'
 require 'yaml'
 require 'fileutils'
 
+
 if File.file?("#{File.dirname(__FILE__)}/../version.rb")
   # Load the Current Provisioner Version Module
   require File.expand_path("#{File.dirname(__FILE__)}/../version.rb")
@@ -15,6 +16,9 @@ class Hosts
   def Hosts.configure(config, settings)
     # Load your Secrets file
     secrets = load_secrets
+
+    ENV['ATLAS_TOKEN'] = secrets['ATLAS_TOKEN']
+
     # Main loop to configure VM
     settings['hosts'].each_with_index do |host, index|
       configure_plugins(host)
@@ -23,6 +27,8 @@ class Hosts
       if host['settings'].has_key?('parallel') && host['settings']['parallel']
         ENV['VAGRANT_NO_PARALLEL'] = 'no'
       end
+
+      ENV['VAGRANT_SERVER_URL'] = secrets['vagrant_server_url'] if host['settings'].has_key?('vagrant_server_url') && !host['settings']['vagrant_server_url'].empty?
 
       provider = host['settings']['provider-type']
       config.vm.define "#{host['settings']['server_id']}--#{host['settings']['hostname']}.#{host['settings']['domain']}" do |server|
