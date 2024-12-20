@@ -14,10 +14,9 @@ end
 # This class takes the Hosts.yaml and set's the neccessary variables to run provider specific sequences to boot a VM.
 class Hosts
   def Hosts.configure(config, settings)
-    # Load your Secrets file
-    secrets = load_secrets
+    secrets = Hosts.load_secrets
 
-    ENV['ATLAS_TOKEN'] = secrets['ATLAS_TOKEN']
+    ENV['ATLAS_TOKEN'] = secrets['ATLAS_TOKEN'] if secrets && secrets.key?('ATLAS_TOKEN')
 
     # Main loop to configure VM
     settings['hosts'].each_with_index do |host, index|
@@ -603,8 +602,23 @@ class Hosts
   end
 
   def self.load_secrets
-    secrets_path = "#{File.dirname(__FILE__)}/../.secrets.yml"
-    YAML.load(File.read(secrets_path)) if File.file?(secrets_path)
+    secrets_dir = File.dirname(__FILE__)
+    secrets_path = File.join(secrets_dir, 'secrets.yml')
+    hidden_secrets_path = File.join(secrets_dir, '.secrets.yml')
+    
+    secrets = {}
+    
+    # Load secrets.yml if it exists
+    if File.file?(secrets_path)
+      secrets.merge!(YAML.load(File.read(secrets_path)) || {})
+    end
+    
+    # Load .secrets.yml if it exists, overwriting any duplicate keys
+    if File.file?(hidden_secrets_path)
+      secrets.merge!(YAML.load(File.read(hidden_secrets_path)) || {})
+    end
+    
+    secrets
   end
 
   def self.configure_plugins(host)
