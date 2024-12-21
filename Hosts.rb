@@ -29,7 +29,7 @@ class Hosts
       
       ENV['VAGRANT_SERVER_URL'] = host['settings']['box_url'] if host['settings'].has_key?('box_url')
 
-      provider = host['settings']['provider-type']
+      provider = host['settings']['provider_type']
       config.vm.define "#{host['settings']['server_id']}--#{host['settings']['hostname']}.#{host['settings']['domain']}" do |server|
         server.vm.box = host['settings']['box']
         config.vm.box_url = host['settings']['box_url'].to_s.empty? ? "https://vagrantcloud.com/#{host['settings']['box']}" : "#{host['settings']['box_url']}/#{host['settings']['box']}"
@@ -40,8 +40,8 @@ class Hosts
         default_ssh_key = "./core/ssh_keys/id_rsa"
         vagrant_ssh_key = host['settings']['vagrant_user_private_key_path']
         server.ssh.private_key_path = File.exist?(vagrant_ssh_key) ? [vagrant_ssh_key, default_ssh_key] : default_ssh_key
-        server.ssh.insert_key = false # host['settings']['vagrant_insert_key'], Note we are no longer automatically forcing the key in via Vagrants SSH insertion function
-        server.ssh.forward_agent = host['settings']['ssh_forward_agent']
+        server.ssh.insert_key = false # host['settings']['vagrant_ssh_insert_key'], Note we are no longer automatically forcing the key in via Vagrants SSH insertion function
+        server.ssh.forward_agent = host['settings']['vagrant_ssh_forward_agent']
         config.vm.communicator = :ssh
         config.winrm.username = host['settings']['vagrant_user']
         config.winrm.password = host['settings']['vagrant_user_pass']
@@ -468,7 +468,7 @@ class Hosts
       end
 
       ## Save variables to .vagrant directory
-      if host.has_key?('networks') && host['settings']['provider-type'] == 'virtualbox' &&  host['settings']['post_provision']
+      if host.has_key?('networks') && host['settings']['provider_type'] == 'virtualbox' &&  host['settings']['post_provision']
         host['networks'].each_with_index do |network, netindex|
           config.trigger.after [:up] do |trigger|
             trigger.info = "Post-Provisioning Vagrant Operations"
@@ -531,7 +531,7 @@ class Hosts
                   end
 
                   ## Copy the Updated Key from the VM, and then Delete the default Template Key from the VM
-                  if host['settings']['vagrant_insert_key']
+                  if host['settings']['vagrant_ssh_insert_key']
                     puts "#{ prefix } Transferring New SSH key"
                     id_transfer_cmd = "vagrant ssh -c 'cat /home/startcloud/.ssh/id_ssh_rsa' > #{host['settings']['vagrant_user_private_key_path']}"
                     id_transfer_cmd = "vagrant scp :/home/startcloud/.ssh/id_ssh_rsa #{host['settings']['vagrant_user_private_key_path']}" if Vagrant.has_plugin?("vagrant-scp-sync")
@@ -547,7 +547,7 @@ class Hosts
         end
       end
 
-      if host['zones'] && host['zones'].has_key?('post_provision_boot') && host['zones']['post_provision_boot'] && host['settings']['provider-type'] == 'zones'
+      if host['zones'] && host['zones'].has_key?('post_provision_boot') && host['zones']['post_provision_boot'] && host['settings']['provider_type'] == 'zones'
         config.trigger.after [:up, :provision] do |trigger|
           trigger.info = "post_provision_boot is true, Waiting for instance to stop"
           trigger.ruby do |env, machine|
