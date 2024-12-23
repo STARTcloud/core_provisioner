@@ -296,21 +296,28 @@ class Hosts
         # Register shared folders
         if host.has_key?('folders')
           host['folders'].each do |folder|
-            mount_opts = folder['type'] == folder['type'] ? ['actimeo=1'] : []
-            server.vm.synced_folder "#{folder['map']}", "#{folder ['to']}",
-            type: folder['type'],
-            map: "#{folder['map']}",
-            to: "#{folder['to']}",
-            owner: folder['owner'] ||= host['settings']['vagrant_user'],
-            group: folder['group'] ||= host['settings']['vagrant_user'],
-            mount_options: mount_opts,
-            automount: true,
-            scp__args: folder['args'],
-            rsync__args: folder['args'] ||= ["--verbose", "--archive", "-z", "--copy-links"],
-            rsync__chown: folder['chown'] ||= 'false',
-            create: folder['create'] ||= 'false',
-            rsync__rsync_ownership: folder['rsync_ownership'] ||= 'true',
-            disabled: folder['disabled'] ||= false
+            # Check if it's rsync on Mac and rsync version is 2.6.9 or lower
+            folder_type = if folder['type'] == 'rsync' && Hosts.rsync_version_low?
+                            'scp'
+                          else
+                            folder['type']
+                          end
+                        
+            mount_opts = folder_type == 'nfs' ? ['actimeo=1'] : []
+            server.vm.synced_folder "#{folder['map']}", "#{folder['to']}",
+              type: folder_type,
+              map: "#{folder['map']}",
+              to: "#{folder['to']}",
+              owner: folder['owner'] ||= host['settings']['vagrant_user'],
+              group: folder['group'] ||= host['settings']['vagrant_user'],
+              mount_options: mount_opts,
+              automount: true,
+              scp__args: folder['args'],
+              rsync__args: folder['args'] ||= ["--verbose", "--archive", "-z", "--copy-links"],
+              rsync__chown: folder['chown'] ||= 'false',
+              create: folder['create'] ||= 'false',
+              rsync__rsync_ownership: folder['rsync_ownership'] ||= 'true',
+              disabled: folder['disabled'] ||= false
           end
         end
 
@@ -620,6 +627,11 @@ class Hosts
     end
     
     secrets
+  end
+
+  def self.rsync_version_low?
+    return false unless Vagrant::Util::Platform.darwin?
+    `rsync --version`.include?('2.6.9') || `rsync --version` < '2.6.9'
   end
 
   def self.configure_plugins(host)
