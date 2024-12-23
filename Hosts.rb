@@ -525,8 +525,8 @@ class Hosts
                   ## For CI/CD Automation Purposes Only
                   if host['settings']['debug_build']
                     puts "#{ prefix } Transferring Hosts Template back to Host"
-                    id_transfer_cmd = "vagrant ssh -c 'cat /vagrant/ansible/auto-SHI-Hosts.yml' > auto-SHI-Hosts.yml"
-                    id_transfer_cmd = "vagrant scp :/vagrant/ansible/auto-SHI-Hosts.yml auto-SHI-Hosts.yml" if Vagrant.has_plugin?("vagrant-scp-sync")
+                    id_transfer_cmd = "vagrant ssh -c 'cat /vagrant/ansible/auto-SHI-Hosts.yml' > ./templates/auto-SHI-Hosts.yml"
+                    id_transfer_cmd = "vagrant scp :/vagrant/ansible/auto-SHI-Hosts.yml ./templates/auto-SHI-Hosts.yml" if Vagrant.has_plugin?("vagrant-scp-sync")
                     system(id_transfer_cmd)
                   end
 
