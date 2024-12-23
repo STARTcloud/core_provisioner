@@ -296,28 +296,21 @@ class Hosts
         # Register shared folders
         if host.has_key?('folders')
           host['folders'].each do |folder|
-            # Check if it's rsync on Mac and rsync version is 2.6.9 or lower
-            folder_type = if folder['type'] == 'rsync' && Hosts.rsync_version_low?
-                            'scp'
-                          else
-                            folder['type']
-                          end
-                        
-            mount_opts = folder_type == 'nfs' ? ['actimeo=1'] : []
-            server.vm.synced_folder "#{folder['map']}", "#{folder['to']}",
-              type: folder_type,
-              map: "#{folder['map']}",
-              to: "#{folder['to']}",
-              owner: folder['owner'] ||= host['settings']['vagrant_user'],
-              group: folder['group'] ||= host['settings']['vagrant_user'],
-              mount_options: mount_opts,
-              automount: true,
-              scp__args: folder['args'],
-              rsync__args: folder['args'] ||= ["--verbose", "--archive", "-z", "--copy-links"],
-              rsync__chown: folder['chown'] ||= 'false',
-              create: folder['create'] ||= 'false',
-              rsync__rsync_ownership: folder['rsync_ownership'] ||= 'true',
-              disabled: folder['disabled'] ||= false
+            mount_opts = folder['type'] == folder['type'] ? ['actimeo=1'] : []
+            server.vm.synced_folder "#{folder['map']}", "#{folder ['to']}",
+            type: folder['type'],
+            map: "#{folder['map']}",
+            to: "#{folder['to']}",
+            owner: folder['owner'] ||= host['settings']['vagrant_user'],
+            group: folder['group'] ||= host['settings']['vagrant_user'],
+            mount_options: mount_opts,
+            automount: true,
+            scp__args: folder['args'],
+            rsync__args: folder['args'] ||= ["--verbose", "--archive", "-z", "--copy-links"],
+            rsync__chown: folder['chown'] ||= 'false',
+            create: folder['create'] ||= 'false',
+            rsync__rsync_ownership: folder['rsync_ownership'] ||= 'true',
+            disabled: folder['disabled'] ||= false
           end
         end
 
@@ -487,8 +480,8 @@ class Hosts
               puts "#{ prefix } https://github.com/STARTcloud/#{Provisioner::NAME}/releases/tag/v#{Provisioner::VERSION}"
 
               puts "#{ prefix } Transferring Debugging files back to Host"
-              transfer_cmd = "vagrant scp :/vagrant/support-bundle/adapters.yml .vagrant/provisioned-adapters.yml"
-              transfer_cmd = "vagrant ssh -c 'cat /vagrant/support-bundle/adapters.yml' > .vagrant/provisioned-adapters.yml" if not Vagrant.has_plugin?("vagrant-scp-sync")
+              transfer_cmd = "vagrant scp :/vagrant/support-bundle/provisioned-adapters.yml .vagrant/provisioned-adapters.yml"
+              transfer_cmd = "vagrant ssh -c 'cat /vagrant/support-bundle/provisioned-adapters.yml' > .vagrant/provisioned-adapters.yml" if not Vagrant.has_plugin?("vagrant-scp-sync")
               system(transfer_cmd)
 
               ansible_log = "vagrant scp :/home/#{host['settings']['vagrant_user']}/ansible.log #{host['settings']['server_id']}--#{host['settings']['hostname']}.#{host['settings']['domain']}-ansible.log"
@@ -635,14 +628,23 @@ class Hosts
   end
 
   def self.configure_plugins(host)
-    plugins = Array(host['plugins'])
-    return if plugins.empty?
-
-    plugins.each do |plugin|
-      next if Vagrant.has_plugin?(plugin)
-
-      system("vagrant plugin install #{plugin}")
-      exit system('vagrant', *ARGV)
+    plugins = host['plugins'] || {}
+    install_plugins = Array(plugins['install'])
+    remove_plugins = Array(plugins['remove'])
+  
+    # Remove plugins
+    remove_plugins.each do |plugin|
+      if Vagrant.has_plugin?(plugin['name'])
+        system("vagrant plugin uninstall #{plugin['name']}")
+      end
+    end
+  
+    # Install plugins
+    install_plugins.each do |plugin|
+      next if Vagrant.has_plugin?(plugin['name'])
+  
+      version_option = plugin['version'] == 'latest' ? '' : "--plugin-version #{plugin['version']}"
+      system("vagrant plugin install #{plugin['name']} #{version_option}")
     end
   end
 
