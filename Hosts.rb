@@ -654,9 +654,12 @@ class Hosts
         if Vagrant.has_plugin?(plugin['name'])
           # Only update if not already updated in this session
           unless @@plugin_states["#{plugin['name']}_updated"]
-            system("vagrant plugin update #{plugin['name']}")
-            @@plugin_states["#{plugin['name']}_updated"] = true
-            needs_reload = true
+            # Capture the update output to check if an update actually occurred
+            output = %x(vagrant plugin update #{plugin['name']})
+            if output.include?("Updated '#{plugin['name']}'")
+              @@plugin_states["#{plugin['name']}_updated"] = true
+              needs_reload = true
+            end
           end
         else
           system("vagrant plugin install #{plugin['name']}")
