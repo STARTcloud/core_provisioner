@@ -639,12 +639,20 @@ class Hosts
       end
     end
   
-    # Install plugins
+    # Install and update plugins
     install_plugins.each do |plugin|
-      next if Vagrant.has_plugin?(plugin['name'])
-  
-      version_option = plugin['version'] == 'latest' ? '' : "--plugin-version #{plugin['version']}"
-      system("vagrant plugin install #{plugin['name']} #{version_option}")
+      if plugin['version'] == 'latest'
+        # For 'latest', install if missing and update if exists
+        if Vagrant.has_plugin?(plugin['name'])
+          system("vagrant plugin update #{plugin['name']}")
+        else
+          system("vagrant plugin install #{plugin['name']}")
+        end
+      else
+        # For specific version, install with version if missing
+        next if Vagrant.has_plugin?(plugin['name'])
+        system("vagrant plugin install #{plugin['name']} --plugin-version #{plugin['version']}")
+      end
     end
   end
 
