@@ -631,28 +631,57 @@ class Hosts
     plugins = host['plugins'] || {}
     install_plugins = Array(plugins['install'])
     remove_plugins = Array(plugins['remove'])
+    needs_reload = false
   
     # Remove plugins
     remove_plugins.each do |plugin|
       if Vagrant.has_plugin?(plugin['name'])
         system("vagrant plugin uninstall #{plugin['name']}")
+        needs_reload = true
       end
     end
   
     # Install and update plugins
     install_plugins.each do |plugin|
       if plugin['version'] == 'latest'
-        # For 'latest', install if missing and update if exists
         if Vagrant.has_plugin?(plugin['name'])
-          system("vagrant plugin update #{plugin['name']}")
+          # Update existing plugin if latest is requested
+          result = system("vagrant plugin update #{plugin['name']}")
+          if result
+            # Force environment reload after update
+            needs_reload = true
+            # Clear plugin cache to ensure new version is loaded
+            system("vagrant plugin clean")
+          end
         else
+          # Install new plugin
           system("vagrant plugin install #{plugin['name']}")
+          needs_reload = true
         end
       else
-        # For specific version, install with version if missing
-        next if Vagrant.has_plugin?(plugin['name'])
-        system("vagrant plugin install #{plugin['name']} --plugin-version #{plugin['version']}")
+        # For specific version
+        if Vagrant.has_plugin?(plugin['name'])
+          # Get current version
+          current_version = %x(vagrant plugin list | grep #{plugin['name']}).split('(').last.split(')').first.strip
+          if current_version != plugin['version']
+            # Version mismatch - uninstall and reinstall
+            system("vagrant plugin uninstall #{plugin['name']}")
+            system("vagrant plugin install #{plugin['name']} --plugin-version #{plugin['version']}")
+            needs_reload = true
+          end
+        else
+          # Install new plugin with specific version
+          system("vagrant plugin install #{plugin['name']} --plugin-version #{plugin['version']}")
+          needs_reload = true
+        end
       end
+    end
+
+    # If any plugins were updated/installed/removed, reload Vagrant
+    if needs_reload
+      puts "Plugin changes detected - reloading Vagrant environment"
+      system("vagrant plugin clean") # Clear plugin cache
+      exec("vagrant #{ARGV.join(' ')}") # Restart Vagrant with same arguments
     end
   end
 
