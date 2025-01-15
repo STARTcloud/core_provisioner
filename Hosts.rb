@@ -641,7 +641,7 @@ class Hosts
     # Remove plugins
     remove_plugins.each do |plugin|
       if Vagrant.has_plugin?(plugin['name'])
-        system("vagrant plugin uninstall #{plugin['name']}")
+        system("vagrant", "plugin", "uninstall", plugin['name'])
         needs_reload = true
       end
     end
@@ -658,20 +658,21 @@ class Hosts
           end
         elsif plugin['version'] != 'latest'
           # For specific version, check if version matches
-          current_version = %x(vagrant plugin list | grep #{plugin['name']}).split('(').last.split(')').first.strip
+          current_version = %x(vagrant plugin list | grep #{plugin['name']}).split('(').last.split(')').first.split(',').first.strip
           if current_version != plugin['version']
-            system("vagrant plugin uninstall #{plugin['name']}")
-            system("vagrant plugin install #{plugin['name']} --plugin-version #{plugin['version']}")
+            puts "Version mismatch: current=#{current_version}, wanted=#{plugin['version']}"
+            system("vagrant", "plugin", "uninstall", plugin['name'])
+            system("vagrant", "plugin", "install", plugin['name'], "--plugin-version", plugin['version'])
             needs_reload = true
+          else
+            puts "Plugin #{plugin['name']} is already at version #{plugin['version']}"
           end
         end
       else
         # Install missing plugin
-        if plugin['version'] == 'latest'
-          system("vagrant plugin install #{plugin['name']}")
-        else
-          system("vagrant plugin install #{plugin['name']} --plugin-version #{plugin['version']}")
-        end
+        install_args = ["vagrant", "plugin", "install", plugin['name']]
+        install_args.push("--plugin-version", plugin['version']) unless plugin['version'] == 'latest'
+        system(*install_args)
         needs_reload = true
       end
     end
@@ -679,8 +680,9 @@ class Hosts
     # If any plugins were updated/installed/removed, reload Vagrant
     if needs_reload
       puts "Plugin changes detected - reloading Vagrant environment"
-      system("vagrant plugin clean")
-      exec("vagrant", *ARGV)
+      # Get just the command (up, halt, etc) without any plugin arguments
+      command = ARGV[0] || "up"
+      exec("vagrant", command)
     end
   end
 
