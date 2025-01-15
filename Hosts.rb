@@ -635,10 +635,8 @@ class Hosts
     remove_plugins = Array(plugins['remove'])
     needs_reload = false
     
-    # Track plugin states to avoid repeated updates
+    # Track plugin update states
     @@plugin_states ||= {}
-    return if @@plugin_states[host['settings']['server_id']]
-    @@plugin_states[host['settings']['server_id']] = true
   
     # Remove plugins
     remove_plugins.each do |plugin|
@@ -650,34 +648,31 @@ class Hosts
   
     # Install and update plugins
     install_plugins.each do |plugin|
-      if plugin['version'] == 'latest'
-        if Vagrant.has_plugin?(plugin['name'])
-          # Only update if not already updated in this session
-          unless @@plugin_states["#{plugin['name']}_updated"]
-            # Capture the update output to check if an update actually occurred
-            output = %x(vagrant plugin update #{plugin['name']})
-            if output.include?("Updated '#{plugin['name']}'")
-              @@plugin_states["#{plugin['name']}_updated"] = true
-              needs_reload = true
-            end
+      if Vagrant.has_plugin?(plugin['name'])
+        # Only update plugins marked as 'latest'
+        if plugin['version'] == 'latest'
+          puts "Checking for updates to #{plugin['name']}..."
+          output = %x(vagrant plugin update #{plugin['name']})
+          if output.include?("Updated '#{plugin['name']}'")
+            needs_reload = true
           end
-        else
-          system("vagrant plugin install #{plugin['name']}")
-          needs_reload = true
-        end
-      else
-        # For specific version
-        if Vagrant.has_plugin?(plugin['name'])
+        elsif plugin['version'] != 'latest'
+          # For specific version, check if version matches
           current_version = %x(vagrant plugin list | grep #{plugin['name']}).split('(').last.split(')').first.strip
           if current_version != plugin['version']
             system("vagrant plugin uninstall #{plugin['name']}")
             system("vagrant plugin install #{plugin['name']} --plugin-version #{plugin['version']}")
             needs_reload = true
           end
+        end
+      else
+        # Install missing plugin
+        if plugin['version'] == 'latest'
+          system("vagrant plugin install #{plugin['name']}")
         else
           system("vagrant plugin install #{plugin['name']} --plugin-version #{plugin['version']}")
-          needs_reload = true
         end
+        needs_reload = true
       end
     end
 
@@ -685,7 +680,7 @@ class Hosts
     if needs_reload
       puts "Plugin changes detected - reloading Vagrant environment"
       system("vagrant plugin clean")
-      exec("vagrant #{ARGV.join(' ')}")
+      exec("vagrant", *ARGV)
     end
   end
 
