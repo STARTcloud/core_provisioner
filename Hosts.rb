@@ -353,6 +353,8 @@ class Hosts
                     ansible.install_mode = "pip" if localplaybook['install_mode'] == "pip"
                     ansible.verbose = localplaybook['verbose']
                     ansible.config_file = "/vagrant/ansible/ansible.cfg"
+                    ansible.galaxy_roles_path = "/vagrant"
+
                     ansible.extra_vars = {
                       settings: host['settings'],
                       networks: host['networks'],
