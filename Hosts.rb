@@ -148,7 +148,28 @@ class Hosts
         if host.has_key?('disks') && host['disks'].is_a?(Hash) && host['disks'].has_key?('additional_disks') && !host['disks']['additional_disks'].nil? && provider == 'virtualbox'
           unless File.directory?(disks_directory)
             config.vm.provider "virtualbox" do |storage_provider|
-              storage_provider.customize ["storagectl", :id, "--name", "Virtual I/O Device SCSI controller", "--add", "virtio-scsi", '--hostiocache', 'off']
+              vm_info = %x[#{path_VBoxManage} showvminfo #{:id}].split("\n")
+
+              # Initialize the flag
+              virtio_scsi_enabled = false
+              
+              # Check each line for the presence of "Type: VirtioSCSI"
+              vm_info.each do |line|
+                if line.include?("Type: VirtioSCSI")
+                  virtio_scsi_enabled = true
+                  break # Exit the loop early if found
+                end
+              end
+              
+              # If VirtioSCSI is not enabled, run the command to add it
+              unless virtio_scsi_enabled
+                storage_provider.customize [
+                  "storagectl", :id, 
+                  "--name", "Virtual I/O Device SCSI controller", 
+                  "--add", "virtio-scsi", 
+                  '--hostiocache', 'off'
+                ]
+              end
             end
           end
         end
