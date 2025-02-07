@@ -148,27 +148,12 @@ class Hosts
         if host.has_key?('disks') && host['disks'].is_a?(Hash) && host['disks'].has_key?('additional_disks') && !host['disks']['additional_disks'].nil? && provider == 'virtualbox'
           unless File.directory?(disks_directory)
             config.vm.provider "virtualbox" do |storage_provider|
-              vm_info = %x[#{path_VBoxManage} showvminfo #{:id}].split("\n")
+              host['disks']['additional_disks'].each_with_index do |disks, diskindex|
+                if disks['driver'] == "virtio-scsi"
+                  storage_provider.customize ["storagectl", :id, "--name", "VirtIO Controller", "--add", "virtio-scsi", '--hostiocache', 'off']
 
-              # Initialize the flag
-              virtio_scsi_enabled = false
-              
-              # Check each line for the presence of "Type: VirtioSCSI"
-              vm_info.each do |line|
-                if line.include?("Type: VirtioSCSI")
-                  virtio_scsi_enabled = true
-                  break # Exit the loop early if found
+                  break
                 end
-              end
-              
-              # If VirtioSCSI is not enabled, run the command to add it
-              unless virtio_scsi_enabled
-                storage_provider.customize [
-                  "storagectl", :id, 
-                  "--name", "Virtual I/O Device SCSI controller", 
-                  "--add", "virtio-scsi", 
-                  '--hostiocache', 'off'
-                ]
               end
             end
           end
@@ -180,7 +165,7 @@ class Hosts
             host['disks']['additional_disks'].each_with_index do |disks, diskindex|
               local_disk_filename = File.join(disks_directory, "#{disks['volume_name']}.vdi")
               unless File.exist?(local_disk_filename)
-                storage_provider.customize ['storageattach', :id, '--storagectl', "Virtual I/O Device SCSI controller", '--port', disks['port'], '--device', 0, '--type', 'hdd', '--medium', local_disk_filename]
+                storage_provider.customize ['storageattach', :id, '--storagectl', "VirtIO Controller", '--port', disks['port'], '--device', 0, '--type', 'hdd', '--medium', local_disk_filename]
               end
             end
           end
