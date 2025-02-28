@@ -119,6 +119,67 @@ class Hosts
         end
 
         ##### Begin Virtualbox Configurations #####
+        # Save MAC addresses after VM is created and update Hosts.yml if needed
+        config.trigger.after :up do |trigger|
+          trigger.info = "Checking and updating network interface MAC addresses in Hosts.yml..."
+          trigger.ruby do |env, machine|
+            # Only run this for VirtualBox provider
+            if host['settings']['provider_type'] == 'virtualbox'
+              vm_name = "#{host['settings']['server_id']}--#{host['settings']['hostname']}.#{host['settings']['domain']}"
+
+              # Get VM info from VirtualBox
+              vm_info = `#{path_VBoxManage} showvminfo "#{vm_name}" --machinereadable`
+
+              # Extract MAC addresses for each adapter
+              mac_addresses = {}
+              vm_info.scan(/macaddress(\d+)="(.+?)"/).each do |adapter_num, mac|
+                mac_addresses[adapter_num.to_i] = mac.upcase
+              end
+
+              # Check if we need to update Hosts.yml
+              hosts_yml_path = File.join(Dir.pwd, 'Hosts.yml')
+              if File.exist?(hosts_yml_path)
+                hosts_yml_content = File.read(hosts_yml_path)
+                hosts_yml = YAML.load(hosts_yml_content)
+
+                # Flag to track if we need to update the file
+                needs_update = false
+
+                # Update MAC addresses in the hosts_yml structure
+                hosts_yml['hosts'].each_with_index do |host_entry, host_index|
+                  if host_entry['settings']['hostname'] == host['settings']['hostname']
+                    if host_entry.has_key?('networks') && !host_entry['networks'].empty?
+                      host_entry['networks'].each_with_index do |network, net_index|
+                        # Network index is 0-based in Hosts.yml, but VirtualBox adapters are 1-based
+                        # Additionally, adapter 1 is reserved for NAT, so our networks start at adapter 2
+                        adapter_num = net_index + 2
+
+                        if network['mac'] == 'auto' || network['mac'].nil?
+                          if mac_addresses.has_key?(adapter_num)
+                            # Format MAC address with colons for storage
+                            formatted_mac = mac_addresses[adapter_num].scan(/../).join(':')
+                            hosts_yml['hosts'][host_index]['networks'][net_index]['mac'] = formatted_mac
+                            needs_update = true
+                            puts "Updated MAC address for network #{net_index} to #{formatted_mac}"
+                          end
+                        end
+                      end
+                    end
+                  end
+                end
+
+                # Write updated Hosts.yml if changes were made
+                if needs_update
+                  File.open(hosts_yml_path, 'w') do |file|
+                    file.write(hosts_yml.to_yaml)
+                  end
+                  puts "Updated Hosts.yml with actual MAC addresses"
+                end
+              end
+            end
+          end
+        end
+        
         ##### Disk Configurations #####
         ## https://sleeplessbeastie.eu/2021/05/10/how-to-define-multiple-disks-inside-vagrant-using-virtualbox-provider/
         disks_directory = File.join("./", "disks")
