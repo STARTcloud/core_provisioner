@@ -36,7 +36,7 @@ class Hosts
         server.vm.box = host['settings']['box']
         config.vm.box_url = host['settings']['box_url'].to_s.empty? ? "https://vagrantcloud.com/#{host['settings']['box']}" : "#{host['settings']['box_url']}/#{host['settings']['box']}"
         server.vm.box_version = host['settings']['box_version']
-        config.vm.box_architecture = "#{host['settings']['box_arch']}"
+        config.vm.box_architecture = host['settings']['box_arch']
         server.vm.boot_timeout = host['settings']['setup_wait']
         server.ssh.username = host['settings']['vagrant_user']
         #server.ssh.password = host['settings']['vagrant_user_pass']
@@ -346,9 +346,24 @@ class Hosts
             utm.name = "#{host['settings']['server_id']}--#{host['settings']['hostname']}.#{host['settings']['domain']}"
             utm.cpus = host['settings']['vcpus']
             utm.memory = vm_memory
-            utm.notes = "Vagrant: For testing plugin development"
+            utm.notes = host['utm'] && host['utm']['notes'] ? host['utm']['notes'] : "Vagrant: For testing plugin development"
             utm.wait_time = host['settings']['setup_wait']
             utm.directory_share_mode = directory_share_mode
+            
+            # Additional UTM-specific settings from utm configuration block
+            if host.has_key?('utm') && host['utm'] && !host['utm'].empty?
+              utm.check_guest_additions = host['utm']['check_guest_additions'] if host['utm'].has_key?('check_guest_additions')
+              utm.functional_9pfs = host['utm']['functional_9pfs'] if host['utm'].has_key?('functional_9pfs')
+              
+              # Support for custom UTM AppleScript customizations
+              if host['utm'].has_key?('customizations') && host['utm']['customizations'] && !host['utm']['customizations'].empty?
+                host['utm']['customizations'].each do |customization|
+                  event = customization['event'] || 'pre-boot'
+                  command = customization['command']
+                  utm.customize(event, command) if command
+                end
+              end
+            end
           end
 
           if host.has_key?('roles') and !host['roles'].empty?
