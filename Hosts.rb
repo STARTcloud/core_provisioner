@@ -29,10 +29,14 @@ class Hosts
       ENV['VAGRANT_SERVER_URL'] = host['settings']['box_url'] if host['settings'].has_key?('box_url')
 
       provider = host['settings']['provider_type']
+
+      config.vm.provider provider
+
       config.vm.define "#{host['settings']['server_id']}--#{host['settings']['hostname']}.#{host['settings']['domain']}" do |server|
         server.vm.box = host['settings']['box']
         config.vm.box_url = host['settings']['box_url'].to_s.empty? ? "https://vagrantcloud.com/#{host['settings']['box']}" : "#{host['settings']['box_url']}/#{host['settings']['box']}"
         server.vm.box_version = host['settings']['box_version']
+        config.vm.box_architecture = "#{host['settings']['box_arch']}"
         server.vm.boot_timeout = host['settings']['setup_wait']
         server.ssh.username = host['settings']['vagrant_user']
         #server.ssh.password = host['settings']['vagrant_user_pass']
@@ -60,16 +64,22 @@ class Hosts
         if host.has_key?('networks') and !host['networks'].empty?
           ## This tells Virtualbox to set the Nat network so that we can avoid IP conflicts and more easily identify networks
           ## This Nic cannot be removed which is why its not in the loop below
-#          config.vm.provider "virtualbox" do |network_provider|
-#            # https://github.com/Moonshine-IDE/Super.Human.Installer/issues/116
-#            network_provider.customize ['modifyvm', :id, '--natnet1', '10.244.244.0/24']
-#          end
+          #config.vm.provider "virtualbox" do |network_provider|
+          #  # https://github.com/Moonshine-IDE/Super.Human.Installer/issues/116
+          #  network_provider.customize ['modifyvm', :id, '--natnet1', '10.244.244.0/24']
+          #end
 
           ## Loop over each block, with an index so that we can use the ordering to specify interface number
           host['networks'].each_with_index do |network, netindex|
               ## Get the bridge device the user specifies, if none selected, we need to try our best to get the best one (for every OS: Mac, Windows, and Linux)
               bridge = network['bridge'] if defined?(network['bridge'])
-              bridge = get_bridge_interface(path_VBoxManage) if bridge.nil? && provider == 'virtualbox'
+              if bridge.nil? && (provider == 'virtualbox' || provider == 'utm')
+                bridge = get_bridge_interface(path_VBoxManage)
+                # For UTM on Mac, use only the part before the first colon
+                if provider == 'utm' && Vagrant::Util::Platform.darwin? && bridge && bridge.include?(':')
+                  bridge = bridge.split(':').first
+                end
+              end
 
               ## We then take those variables, and hopefully have the best connection to use and then pass it to vagrant so it can create the network adapters.
               if network['type'] == 'host'
@@ -309,6 +319,49 @@ class Hosts
           end
         end
         ##### End Virtualbox Configurations #####
+
+        ##### Begin UTM type Configurations #####
+        if provider == 'utm'
+          if host['settings']['memory'].to_s =~ /gb|g|/
+            vm_memory = 1024 * host['settings']['memory'].to_s.tr('^0-9', '').to_i
+          elsif host['settings']['memory'] =~ /mb|m|/
+            vm_memory = host['settings']['memory'].tr('^0-9', '')
+          end
+          
+          # Determine directory share mode based on folder configurations
+          directory_share_mode = "none"
+          if host.has_key?('folders')
+            host['folders'].each do |folder|
+              if folder['type'] == 'utm' && !folder['disabled']
+                directory_share_mode = "webDAV"
+                break
+              elsif folder['type'] == 'virtualbox' && !folder['disabled']
+                directory_share_mode = "virtFS"
+                break
+              end
+            end
+          end
+          
+          server.vm.provider :utm do |utm|
+            utm.name = "#{host['settings']['server_id']}--#{host['settings']['hostname']}.#{host['settings']['domain']}"
+            utm.cpus = host['settings']['vcpus']
+            utm.memory = vm_memory
+            utm.notes = "Vagrant: For testing plugin development"
+            utm.wait_time = host['settings']['setup_wait']
+            utm.directory_share_mode = directory_share_mode
+          end
+
+          if host.has_key?('roles') and !host['roles'].empty?
+            host['roles'].each do |rolefwds|
+              if rolefwds.has_key?('port_forwards') and !rolefwds.empty?
+                rolefwds['port_forwards'].each_with_index do |param, index|
+                  config.vm.network "forwarded_port", guest: param['guest'], host: param['host'], host_ip: param['ip']
+                end
+              end
+            end
+          end
+        end
+        ##### End UTM Configurations #####
 
         ##### Begin ZONE type Configurations #####
         if provider == 'zones'
