@@ -379,7 +379,7 @@ class Hosts
         ##### End UTM Configurations #####
 
         ##### Begin ZONE type Configurations #####
-        if provider == 'zones'
+        if provider == 'zone'
           server.vm.provider :zone do |vm|
             vm.hostname                             = "#{host['settings']['subdomain']}.#{host['settings']['domain']}"
             vm.name                                 = "#{host['settings']['partition_id']}--#{host['settings']['subdomain']}.#{host['settings']['domain']}"
