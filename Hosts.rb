@@ -442,7 +442,7 @@ class Hosts
         end
         ## End Vagrant-Zones Configurations
 
-        if host['vars'].has_key?('git_vault_password')
+        if host['vars'] && host['vars'].key?('git_vault_password')
           Hosts.write_results_file(host['vars']['git_vault_password'], 'provisioners/ansible/git_vault_password', false)
         end
 
