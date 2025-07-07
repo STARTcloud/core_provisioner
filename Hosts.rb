@@ -565,7 +565,7 @@ class Hosts
                       provisioner_name: Provisioner::NAME,
                       provisioner_version: Provisioner::VERSION,
                       ansible_winrm_server_cert_validation: "ignore",
-                      ansible_callbacks_enabled:localplaybook['callbacks'],
+                      ansible_callbacks_enabled:remoteplaybook['callbacks'],
                       ansible_ssh_pipelining:remoteplaybook['ssh_pipelining'],
                       ansible_python_interpreter:remoteplaybook['ansible_python_interpreter']
                     }
