@@ -46,9 +46,12 @@ class Hosts
         server.ssh.insert_key = false # host['settings']['vagrant_ssh_insert_key'], Note we are no longer automatically forcing the key in via Vagrants SSH insertion function
         server.ssh.forward_agent = host['settings']['vagrant_ssh_forward_agent']
         server.ssh.keep_alive = host['settings'].key?('vagrant_ssh_keep_alive') ? host['settings']['vagrant_ssh_keep_alive'] : true
-        config.vm.communicator = :ssh
+        config.vm.communicator = host['settings'].key?('vagrant_communicator') ? ":#{host['settings']['vagrant_communicator']}" : :ssh
         config.winrm.username = host['settings']['vagrant_user']
         config.winrm.password = host['settings']['vagrant_user_pass']
+        config.winrm.port = host['settings'].key?('vagrant_winrm_port') ? host['settings']['vagrant_winrm_port'] :  5986
+        config.winssh.shell = host['settings'].key?('vagrant_winssh_shell') ? host['settings']['vagrant_winssh_shell'] : "powershell"
+        config.vm.guest = Hosts.get_vagrant_guest_type(host['settings']['os_type'] || 'linux')
         config.winrm.timeout = host['settings']['setup_wait']
         config.winrm.retry_delay = 30
         config.winrm.retry_limit = 1000
@@ -287,7 +290,7 @@ class Hosts
           end
           vb.name = "#{host['settings']['server_id']}--#{host['settings']['hostname']}.#{host['settings']['domain']}"
           vb.gui = host['settings']['show_console']
-          vb.customize ['modifyvm', :id, '--ostype', host['settings']['os_type']]
+          vb.customize ['modifyvm', :id, '--ostype', host['settings']['os_type'] || 'Debian_64']
           vb.customize ["modifyvm", :id, "--vrdeport", host['settings']['consoleport']]
           vb.customize ["modifyvm", :id, "--vrdeaddress", host['settings']['consolehost']]
           vb.customize ["modifyvm", :id, "--cpus", host['settings']['vcpus']]
@@ -392,7 +395,7 @@ class Hosts
             vm.vagrant_user_private_key_path        = host['settings']['vagrant_user_private_key_path']
             vm.vagrant_user                         = host['settings']['vagrant_user']
             vm.vagrant_user_pass                    = host['settings']['vagrant_user_pass']
-            vm.os_type                              = host['settings']['os_type']
+            vm.os_type                              = Hosts.get_zone_os_type(host['settings']['os_type'] || 'generic')
             vm.firmware_type                        = host['settings']['firmware_type']
             vm.setup_wait                           = host['settings']['setup_wait']
             vm.consoleport                          = host['settings']['consoleport']
@@ -755,6 +758,29 @@ class Hosts
     end
 
     bridge
+  end
+
+  # Helper method to determine Vagrant guest type from VirtualBox OS type
+  def self.get_vagrant_guest_type(os_type)
+    return :linux if os_type.nil?
+    
+    # Check if it's a Windows OS type
+    os_type.downcase.include?('windows') ? :windows : :linux
+  end
+
+  # Helper method to translate VirtualBox OS type to zone OS type
+  def self.get_zone_os_type(os_type)
+    return 'generic' if os_type.nil?
+    
+    os_type_lower = os_type.downcase
+    
+    if os_type_lower.include?('windows')
+      'windows'
+    elsif os_type_lower.include?('openbsd')
+      'openbsd'
+    else
+      'generic'  # Default for Linux and other types
+    end
   end
 
   def self.load_secrets
