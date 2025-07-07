@@ -39,6 +39,7 @@ class Hosts
         config.vm.box_architecture = host['settings']['box_arch']
         server.vm.boot_timeout = host['settings']['setup_wait']
         server.ssh.username = host['settings']['vagrant_user']
+        config.vm.ignore_box_vagrantfile = host['settings'].key?('vagrant_ignore_box_vagrantfile') ? host['settings']['vagrant_ignore_box_vagrantfile'] : true
         #server.ssh.password = host['settings']['vagrant_user_pass']
         default_ssh_key = "./core/ssh_keys/id_rsa"
         vagrant_ssh_key = host['settings']['vagrant_user_private_key_path']
