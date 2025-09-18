@@ -47,7 +47,7 @@ class Hosts
         server.ssh.insert_key = false # host['settings']['vagrant_ssh_insert_key'], Note we are no longer automatically forcing the key in via Vagrants SSH insertion function
         server.ssh.forward_agent = host['settings']['vagrant_ssh_forward_agent']
         server.ssh.keep_alive = host['settings'].key?('vagrant_ssh_keep_alive') ? host['settings']['vagrant_ssh_keep_alive'] : true
-        config.vm.communicator = host['settings'].key?('vagrant_communicator') ? ":#{host['settings']['vagrant_communicator']}" : :ssh
+        config.vm.communicator = host['settings'].key?('vagrant_communicator') ? host['settings']['vagrant_communicator'].to_sym : :ssh
         config.winrm.username = host['settings']['vagrant_user']
         config.winrm.password = host['settings']['vagrant_user_pass']
         config.winrm.port = host['settings'].key?('vagrant_winrm_port') ? host['settings']['vagrant_winrm_port'] :  5986
