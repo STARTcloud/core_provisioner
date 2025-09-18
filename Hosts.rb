@@ -57,6 +57,7 @@ class Hosts
         config.winrm.timeout = host['settings']['setup_wait']
         config.winrm.retry_delay = host['settings'].key?('vagrant_winrm_retry_delay') ? host['settings']['vagrant_winrm_retry_delay'] :  30
         config.winrm.retry_limit = host['settings'].key?('vagrant_winrm_retry_limit') ? host['settings']['vagrant_winrm_retry_limit'] :  1000
+        config.winrm.ssl_peer_verification = host['settings'].key?('vagrant_winrm_ssl_peer_verification') ? host['settings']['vagrant_winrm_ssl_peer_verification'] :  false
 
         if Vagrant::Util::Platform.windows?  || Vagrant::Util::Platform.cygwin? || Vagrant::Util::Platform.wsl?
           path_VBoxManage = "VBoxManage.exe"
