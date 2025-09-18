@@ -25,7 +25,7 @@ class Hosts
       if host['settings'].has_key?('parallel') && host['settings']['parallel']
         ENV['VAGRANT_NO_PARALLEL'] = 'no'
       end
-      
+
       ENV['VAGRANT_SERVER_URL'] = host['settings']['box_url'] if host['settings'].has_key?('box_url')
 
       provider = host['settings']['provider_type']
@@ -140,28 +140,28 @@ class Hosts
             # Only run this for VirtualBox provider
             if host['settings']['provider_type'] == 'virtualbox'
               vm_name = "#{host['settings']['server_id']}--#{host['settings']['hostname']}.#{host['settings']['domain']}"
-              
+
               # Get VM info from VirtualBox
               vm_info = `#{path_VBoxManage} showvminfo "#{vm_name}" --machinereadable`
-              
+
               # Extract MAC addresses for each adapter
               mac_addresses = {}
               vm_info.scan(/macaddress(\d+)="(.+?)"/).each do |adapter_num, mac|
                 mac_addresses[adapter_num.to_i] = mac.upcase
               end
-              
+
               # Check if we need to update Hosts.yml
               hosts_yml_path = File.join(Dir.pwd, 'Hosts.yml')
               if File.exist?(hosts_yml_path)
                 # Read the file line by line
                 lines = File.readlines(hosts_yml_path)
-                
+
                 # Track if we're in the right host section
                 in_current_host = false
                 in_networks = false
                 current_network_index = -1
                 needs_update = false
-                
+
                 # Process each line
                 lines.each_with_index do |line, i|
                   # Check if we're entering a host section
@@ -170,23 +170,23 @@ class Hosts
                     in_networks = false
                     current_network_index = -1
                   end
-                  
+
                   # Check if we're in the settings section of the current host
                   if !in_current_host && line.strip.start_with?('hostname:') && line.include?(host['settings']['hostname'])
                     in_current_host = true
                   end
-                  
+
                   # Check if we're entering the networks section of the current host
                   if in_current_host && line.strip == 'networks:'
                     in_networks = true
                     current_network_index = -1
                   end
-                  
+
                   # Check if we're starting a new network entry
                   if in_networks && line.strip == '-'
                     current_network_index += 1
                   end
-                  
+
                   # Check if this line contains a MAC address set to 'auto'
                   if in_networks && current_network_index >= 0 && line.strip.start_with?('mac:') && (line.include?('auto') || line.strip == 'mac:')
                     adapter_num = current_network_index + 2  # +2 because adapter 1 is NAT
@@ -199,7 +199,7 @@ class Hosts
                     end
                   end
                 end
-                
+
                 # Write updated Hosts.yml if changes were made
                 if needs_update
                   File.open(hosts_yml_path, 'w') do |file|
@@ -332,7 +332,7 @@ class Hosts
           elsif host['settings']['memory'] =~ /mb|m|/
             vm_memory = host['settings']['memory'].tr('^0-9', '')
           end
-          
+
           # Determine directory share mode based on folder configurations
           directory_share_mode = "none"
           if host.has_key?('folders')
@@ -346,7 +346,7 @@ class Hosts
               end
             end
           end
-          
+
           server.vm.provider :utm do |utm|
             utm.name = "#{host['settings']['server_id']}--#{host['settings']['hostname']}.#{host['settings']['domain']}"
             utm.cpus = host['settings']['vcpus']
@@ -354,12 +354,12 @@ class Hosts
             utm.notes = host['utm'] && host['utm']['notes'] ? host['utm']['notes'] : "Vagrant: For testing plugin development"
             utm.wait_time = host['settings']['setup_wait']
             utm.directory_share_mode = directory_share_mode
-            
+
             # Additional UTM-specific settings from utm configuration block
             if host.has_key?('utm') && host['utm'] && !host['utm'].empty?
               utm.check_guest_additions = host['utm']['check_guest_additions'] if host['utm'].has_key?('check_guest_additions')
               utm.functional_9pfs = host['utm']['functional_9pfs'] if host['utm'].has_key?('functional_9pfs')
-              
+
               # Support for custom UTM AppleScript customizations
               if host['utm'].has_key?('customizations') && host['utm']['customizations'] && !host['utm']['customizations'].empty?
                 host['utm']['customizations'].each do |customization|
@@ -765,7 +765,7 @@ class Hosts
   # Helper method to determine Vagrant guest type from VirtualBox OS type
   def self.get_vagrant_guest_type(os_type)
     return :linux if os_type.nil?
-    
+
     # Check if it's a Windows OS type
     os_type.downcase.include?('windows') ? :windows : :linux
   end
@@ -773,9 +773,9 @@ class Hosts
   # Helper method to translate VirtualBox OS type to zone OS type
   def self.get_zone_os_type(os_type)
     return 'generic' if os_type.nil?
-    
+
     os_type_lower = os_type.downcase
-    
+
     if os_type_lower.include?('windows')
       'windows'
     elsif os_type_lower.include?('openbsd')
@@ -789,19 +789,19 @@ class Hosts
     secrets_dir = File.dirname(__FILE__)
     secrets_path = File.join(secrets_dir, '../secrets.yml')
     hidden_secrets_path = File.join(secrets_dir, '../.secrets.yml')
-    
+
     secrets = {}
-    
+
     # Load secrets.yml if it exists
     if File.file?(secrets_path)
       secrets.merge!(YAML.load(File.read(secrets_path)) || {})
     end
-    
+
     # Load .secrets.yml if it exists, overwriting any duplicate keys
     if File.file?(hidden_secrets_path)
       secrets.merge!(YAML.load(File.read(hidden_secrets_path)) || {})
     end
-    
+
     secrets
   end
 
