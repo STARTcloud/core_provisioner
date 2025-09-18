@@ -51,6 +51,7 @@ class Hosts
         config.winrm.username = host['settings']['vagrant_user']
         config.winrm.password = host['settings']['vagrant_user_pass']
         config.winrm.port = host['settings'].key?('vagrant_winrm_port') ? host['settings']['vagrant_winrm_port'] :  5986
+        config.winrm.transport = host['settings'].key?('vagrant_winrm_transport') ? ":#{host['settings']['vagrant_winrm_transport']}" : :ssl
         config.winssh.shell = host['settings'].key?('vagrant_winssh_shell') ? host['settings']['vagrant_winssh_shell'] : "powershell"
         config.vm.guest = Hosts.get_vagrant_guest_type(host['settings']['os_type'] || 'linux')
         config.winrm.timeout = host['settings']['setup_wait']
