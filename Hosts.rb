@@ -107,7 +107,8 @@ class Hosts
                   vlan: network['vlan'],
                   dns: network['dns'],
                   provisional: network['provisional'],
-                  route: network['route']
+                  route: network['route'],
+                  etherstub: network['etherstub']
                   #name: 'core_provisioner_network'
               end
               if network['type'] == 'external'
@@ -128,7 +129,8 @@ class Hosts
                   vlan: network['vlan'],
                   dns: network['dns'],
                   provisional: network['provisional'],
-                  route: network['route']
+                  route: network['route'],
+                  etherstub: network['etherstub']
               end
           end
         end
@@ -444,7 +446,6 @@ class Hosts
             vm.safe_shutdown                        = host['zones']['safe_shutdown']
             vm.setup_method                         = host['zones']['setup_method']
             vm.on_demand_vnics                      = host['zones']['on_demand_vnics']
-            vm.etherstub                            = host['zones']['etherstub']
           end
         end
         ## End Vagrant-Zones Configurations
