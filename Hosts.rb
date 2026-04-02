@@ -444,6 +444,7 @@ class Hosts
             vm.safe_shutdown                        = host['zones']['safe_shutdown']
             vm.setup_method                         = host['zones']['setup_method']
             vm.on_demand_vnics                      = host['zones']['on_demand_vnics']
+            vm.etherstub                            = host['zones']['etherstub']
           end
         end
         ## End Vagrant-Zones Configurations
