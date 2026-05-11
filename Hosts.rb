@@ -446,6 +446,8 @@ class Hosts
             vm.safe_shutdown                        = host['zones']['safe_shutdown']
             vm.setup_method                         = host['zones']['setup_method']
             vm.on_demand_vnics                      = host['zones']['on_demand_vnics']
+            vm.qga_slot                             = host['zones']['qga_slot']           if host['zones'].key?('qga_slot')           && !host['zones']['qga_slot'].nil?
+            vm.qga_network_script                   = host['zones']['qga_network_script'] if host['zones'].key?('qga_network_script') && !host['zones']['qga_network_script'].nil?
           end
         end
         ## End Vagrant-Zones Configurations
