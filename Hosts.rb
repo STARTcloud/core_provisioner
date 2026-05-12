@@ -29,10 +29,11 @@ class Hosts
       ENV['VAGRANT_SERVER_URL'] = host['settings']['box_url'] if host['settings'].has_key?('box_url')
 
       provider = host['settings']['provider_type']
+      machine_domain = host['settings']['machine_domain'] || host['settings']['domain']
 
       config.vm.provider provider
 
-      config.vm.define "#{host['settings']['server_id']}--#{host['settings']['hostname']}.#{host['settings']['domain']}" do |server|
+      config.vm.define "#{host['settings']['server_id']}--#{host['settings']['hostname']}.#{machine_domain}" do |server|
         server.vm.box = host['settings']['box']
         config.vm.box_url = host['settings']['box_url'].to_s.empty? ? "https://vagrantcloud.com/#{host['settings']['box']}" : "#{host['settings']['box_url']}/#{host['settings']['box']}"
         server.vm.box_version = host['settings']['box_version']
@@ -142,7 +143,7 @@ class Hosts
           trigger.ruby do |env, machine|
             # Only run this for VirtualBox provider
             if host['settings']['provider_type'] == 'virtualbox'
-              vm_name = "#{host['settings']['server_id']}--#{host['settings']['hostname']}.#{host['settings']['domain']}"
+              vm_name = "#{host['settings']['server_id']}--#{host['settings']['hostname']}.#{machine_domain}"
 
               # Get VM info from VirtualBox
               vm_info = `#{path_VBoxManage} showvminfo "#{vm_name}" --machinereadable`
@@ -293,7 +294,7 @@ class Hosts
           elsif host['settings']['memory'] =~ /mb|m|/
             vm_memory = host['settings']['memory'].tr('^0-9', '')
           end
-          vb.name = "#{host['settings']['server_id']}--#{host['settings']['hostname']}.#{host['settings']['domain']}"
+          vb.name = "#{host['settings']['server_id']}--#{host['settings']['hostname']}.#{machine_domain}"
           vb.gui = host['settings']['show_console']
           vb.customize ['modifyvm', :id, '--ostype', host['settings']['os_type'] || 'Debian_64']
           vb.customize ["modifyvm", :id, "--vrdeport", host['settings']['consoleport']]
@@ -351,7 +352,7 @@ class Hosts
           end
 
           server.vm.provider :utm do |utm|
-            utm.name = "#{host['settings']['server_id']}--#{host['settings']['hostname']}.#{host['settings']['domain']}"
+            utm.name = "#{host['settings']['server_id']}--#{host['settings']['hostname']}.#{machine_domain}"
             utm.cpus = host['settings']['vcpus']
             utm.memory = vm_memory
             utm.notes = host['utm'] && host['utm']['notes'] ? host['utm']['notes'] : "Vagrant: For testing plugin development"
@@ -389,8 +390,8 @@ class Hosts
         ##### Begin ZONE type Configurations #####
         if provider == 'zone'
           server.vm.provider :zone do |vm|
-            vm.hostname                             = "#{host['settings']['subdomain']}.#{host['settings']['domain']}"
-            vm.name                                 = "#{host['settings']['partition_id']}--#{host['settings']['subdomain']}.#{host['settings']['domain']}"
+            vm.hostname                             = "#{host['settings']['hostname']}.#{machine_domain}"
+            vm.name                                 = "#{host['settings']['server_id']}--#{host['settings']['hostname']}.#{machine_domain}"
             vm.partition_id                         = host['settings']['server_id']
 
             vm.vagrant_cloud_creator                = host['settings']['cloud_creator']
@@ -616,7 +617,7 @@ class Hosts
 
       ## Syncback
       if host.has_key?('folders') && Vagrant.has_plugin?("vagrant-scp-sync")
-        prefix = "==> #{host['settings']['server_id']}--#{host['settings']['hostname']}.#{host['settings']['domain']}:"
+        prefix = "==> #{host['settings']['server_id']}--#{host['settings']['hostname']}.#{machine_domain}:"
         host['folders'].each do |folder|
           next unless folder['syncback']
           config.trigger.after :rsync, type: :command do |trigger|
@@ -638,7 +639,7 @@ class Hosts
           config.trigger.after [:up] do |trigger|
             trigger.info = "Post-Provisioning Vagrant Operations"
             trigger.ruby do |env, machine|
-              prefix = "==> #{host['settings']['server_id']}--#{host['settings']['hostname']}.#{host['settings']['domain']}:"
+              prefix = "==> #{host['settings']['server_id']}--#{host['settings']['hostname']}.#{machine_domain}:"
               puts "#{ prefix } This server has been provisioned with core_provisioner v#{CoreProvisioner::VERSION}"
               puts "#{ prefix } https://github.com/STARTcloud/core_provisioner/releases/tag/v#{CoreProvisioner::VERSION}"
               puts "#{ prefix } This server has been provisioned with #{Provisioner::NAME} v#{Provisioner::VERSION}"
@@ -649,7 +650,7 @@ class Hosts
               transfer_cmd = "vagrant ssh -c 'cat /vagrant/support-bundle/provisioned-adapters.yml' > .vagrant/provisioned-adapters.yml" if not Vagrant.has_plugin?("vagrant-scp-sync")
               system(transfer_cmd)
 
-              ansible_log = "vagrant scp :/home/#{host['settings']['vagrant_user']}/ansible.log #{host['settings']['server_id']}--#{host['settings']['hostname']}.#{host['settings']['domain']}-ansible.log"
+              ansible_log = "vagrant scp :/home/#{host['settings']['vagrant_user']}/ansible.log #{host['settings']['server_id']}--#{host['settings']['hostname']}.#{machine_domain}-ansible.log"
               system(ansible_log) if Vagrant.has_plugin?("vagrant-scp-sync")
 
               support_bundle = "vagrant scp :/vagrant/support-bundle.zip support-bundle.zip"
