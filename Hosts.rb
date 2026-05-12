@@ -653,8 +653,9 @@ class Hosts
               ansible_log = "vagrant scp :/home/#{host['settings']['vagrant_user']}/ansible.log #{host['settings']['server_id']}--#{host['settings']['hostname']}.#{machine_domain}-ansible.log"
               system(ansible_log) if Vagrant.has_plugin?("vagrant-scp-sync")
 
+              has_support_bundle_role = host.has_key?('roles') && host['roles'].any? { |r| r.is_a?(Hash) && r['name'] == 'startcloud.startcloud_roles.support_bundle' }
               support_bundle = "vagrant scp :/vagrant/support-bundle.zip support-bundle.zip"
-              system(support_bundle) if Vagrant.has_plugin?("vagrant-scp-sync")
+              system(support_bundle) if Vagrant.has_plugin?("vagrant-scp-sync") && has_support_bundle_role
 
               if File.exist?('.vagrant/provisioned-adapters.yml')
                 adapters_content = File.read('.vagrant/provisioned-adapters.yml')
