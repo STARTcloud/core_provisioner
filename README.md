@@ -8,115 +8,89 @@
   <h3 align="center">Core Provisioner</h3>
 
   <p align="center">
-    Documentation for Core Provisioner
-    <br />
-    <a href="https://github.com/STARTcloud/core_provisioner/"><strong>Explore the docs »</strong></a>
+    The shared Vagrant driver for STARTcloud provisioners
     <br />
     <br />
-    <a href="https://github.com/STARTcloud/core_provisioner/">View Demo</a>
-    ·
     <a href="https://github.com/STARTcloud/core_provisioner/issues">Report Bug</a>
     ·
     <a href="https://github.com/STARTcloud/core_provisioner/issues">Request Feature</a>
   </p>
 </p>
 
-<!-- TABLE OF CONTENTS -->
-## Table of Contents
-
-* [About the Project](#core-provisioner)
-* [Key Features](#key-features)
-* [Vagrantfile Explained](#vagrantfile-explained)
-* [Roadmap](#roadmap)
-* [Contributing](#contributing)
-* [License](#license)
-* [Contact](#authors)
-* [Acknowledgements](#acknowledgments)
-
-
 ## Core Provisioner
-Core Provisioner is a modular framework designed to simplify the provisioning of virtual machines using Vagrant, with a focus on flexibility and extensibility. It leverages a YAML configuration file (`Hosts.yml`) and a Ruby interpreter (`Hosts.rb`) to dynamically generate Vagrant configurations, allowing for a more declarative approach to setting up virtual environments. This project aims to streamline the provisioning process by integrating default SSH keys for STARTcloud Vagrant projects and adding support for Ansible, enhancing automation and consistency across deployments.
 
-## Key Features
+Core Provisioner is the shared Vagrant driver ("the skeleton") used by every STARTcloud provisioner (for example [startcloud_generic_provisioner](https://github.com/STARTcloud/startcloud_generic_provisioner)). It reads a declarative `Hosts.yml` and turns it into a full Vagrant machine definition — providers, networking, disks, synced folders, shell/Ansible/Docker provisioning, and post-provision syncback — via a single Ruby entry point, `Hosts.rb`.
 
-- **Declarative Configuration**: Utilizes `Hosts.rb` to parse `Hosts.yml`, a YAML file that contains all necessary configurations for setting up and running virtual machines.
-- **Default SSH Keys**: Provides default SSH keys for all STARTcloud Vagrant projects, simplifying the authentication process.
-- **Ansible Support**: Integrates Ansible support into the provisioning process, allowing for automated configuration management and deployment.
+## What's in the skeleton
 
-## Submodule Support
-Include this as a submodule in other projects with the following command: 
+| File | Purpose |
+| ---- | ------- |
+| `Hosts.rb` | The driver. Parses `Hosts.yml` and configures VirtualBox, UTM, and Bhyve/zones machines end to end |
+| `Vagrantfile` | Consumer-facing stub. Lives at a provisioner's repo root and requires the skeleton's `Hosts.rb` from `core/` |
+| `version.rb` | `CoreProvisioner::VERSION` — stamped into every provision's Ansible `extra_vars` and managed by release-please |
+| `ssh_keys/` | The well-known bootstrap keypair. Insecure by design (like Vagrant's insecure key) — replaced at provision time when `vagrant_ssh_insert_key` is enabled |
+| `examples/Hosts.yml` | A complete, commented example configuration |
 
+## Consuming the skeleton
+
+Each release publishes fetchable archives as GitHub release assets:
+
+- `core_provisioner-<version>.tar.gz` — the immutable, versioned archive. Pin an exact version and verify the `.sha256` sidecar after download.
+- `core_provisioner.tar.gz` — a version-less copy at a stable URL (`releases/latest/download/core_provisioner.tar.gz`) for quick starts.
+
+The archive carries the skeleton files at its root, so a consumer stages it straight into its driver directory (today `core/`):
+
+```bash
+curl -fsSL -o core_provisioner-0.2.8.tar.gz \
+  https://github.com/STARTcloud/core_provisioner/releases/download/v0.2.8/core_provisioner-0.2.8.tar.gz
+curl -fsSL -o core_provisioner-0.2.8.tar.gz.sha256 \
+  https://github.com/STARTcloud/core_provisioner/releases/download/v0.2.8/core_provisioner-0.2.8.tar.gz.sha256
+sha256sum -c core_provisioner-0.2.8.tar.gz.sha256
+mkdir -p core && tar -xzf core_provisioner-0.2.8.tar.gz -C core
 ```
-git submodule add -b submodule https://github.com/STARTcloud/core_provisioner core
-```
 
-## Vagrantfile Explained
-The Vagrantfile acts as the orchestrator that sets up and configures the virtual machines (VMs) based on the specifications found in the `Hosts.yml` file. It does this by requiring and executing the `Hosts.rb` script, which interprets the `Hosts.yml` file and generates the necessary Vagrant configurations. Here's a breakdown of what the Vagrantfile is doing:
+Released provisioners must pin an exact core version — never a floating branch — so their release artifacts stay byte-reproducible.
 
-- **Integration with `Hosts.rb`**: The Vagrantfile requires the `Hosts.rb` script, which is responsible for interpreting the `Hosts.yml` file. This integration allows the Vagrantfile to leverage the configurations defined in `Hosts.yml` to dynamically generate Vagrant configurations for the VMs.
+> The legacy `submodule` branch still exists for consumers that haven't cut over from `git submodule` consumption yet. New consumers should use release archives.
 
-- **Loading `Hosts.yml` Configurations**: The Vagrantfile reads the `Hosts.yml` file using Ruby's YAML library. This file contains all the necessary configurations for setting up and running the VMs, such as provider settings, network configurations, disk setups, and provisioning scripts.
+## How it fits together
 
-- **Configuring Vagrant**: After loading the configurations from `Hosts.yml`, the Vagrantfile uses the `Hosts.configure` method from `Hosts.rb` to apply these configurations to the Vagrant environment. This method dynamically generates Vagrant configurations based on the specifications provided in `Hosts.yml`.
+- **`Hosts.yml`** — the declarative machine description: settings, networks, disks, zones/UTM/vbox provider blocks, provisioning playbooks, synced folders, roles, and vars. See `examples/Hosts.yml`.
+- **`Hosts.rb`** — interprets `Hosts.yml` inside the consumer's Vagrant run and applies every setting to the chosen provider. It also handles post-provision work: results/adapter reporting, support-bundle and SSH-key syncback, and zones post-provision boot.
+- **`Vagrantfile`** — the stub a provisioner ships at its root: load `Hosts.yml`, require the skeleton's `Hosts.rb`, call `Hosts.configure`.
 
-- **Provider Configuration**: The Vagrantfile specifies the version of Vagrant being used ("2") and delegates the actual configuration of the VMs to `Hosts.rb` through the `Hosts.configure` method. This allows for a flexible and provider-agnostic setup process, as `Hosts.rb` can handle different VM providers based on the configurations in `Hosts.yml`.
-
-In essence, the Vagrantfile is a bridge between the declarative `Hosts.yml` file and the Vagrant environment, utilizing `Hosts.rb` to interpret and apply the configurations defined in `Hosts.yml`. This approach allows for a highly customizable and scalable setup process, making it easier to manage complex VM configurations.
-
-## Roadmap
-See the [open issues](https://github.com/STARTcloud/core_provisioner/issues) for a list of proposed features (and known issues).
+The provisioning content itself (Ansible collections, templates, scripts, installers) belongs to the consuming provisioner, not to this repo.
 
 ## Provider Support
 
-| Provider       | Supported by Core Provisioner |
-|----------------|--------------------------------|
-| VirtualBox     | Yes                            |
-| Bhyve/Zones    | Yes                            |
-| VMware Fusion  | No                             |
-| Hyper-V        | No                             |
-| Parallels      | No                             |
-| AWS EC2        | Yes                            |
-| Google Cloud   | No                             |
-| Azure          | No                             |
-| DigitalOcean   | No                             |
-| Linode         | No                             |
-| Vultr          | No                             |
-| Oracle Cloud   | No                             |
-| OpenStack      | No                             |
-| Rackspace      | No                             |
-| Alibaba Cloud  | No                             |
-| Aiven          | No                             |
-| Packet         | No                             |
-| Scaleway       | No                             |
-| OVH            | No                             |
-| Exoscale       | No                             |
-| Hetzner Cloud  | No                             |
-| KVM            | Yes                            |
-| QEMU           | Yes                            |
-| Docker Desktop | No                             |
-| HyperKit       | No                             |
-| WSL2           | No                             |
+| Provider | Supported |
+| -------- | --------- |
+| VirtualBox | Yes |
+| UTM (macOS) | Yes |
+| Bhyve/Zones (vagrant-zones) | Yes |
+| KVM / QEMU | Yes |
+| VMware / Hyper-V / cloud providers | No |
 
-## Built With
-* [Vagrant](https://www.vagrantup.com/) - Portable Development Environment Suite.
-* [VirtualBox](https://www.virtualbox.org/wiki/Downloads) - Hypervisor.
-* [Ansible](https://www.ansible.com/) - Virtual Machine Automation Management.
+## Releases
+
+Releases are cut by [release-please](https://github.com/googleapis/release-please) from Conventional Commits on `main`, tagged plain `v<version>`, with `version.rb` managed in lockstep. The build job refuses to publish if the tag and `version.rb` disagree. See [RELEASE.md](RELEASE.md).
 
 ## Contributing
 
-Please read [CONTRIBUTING.md](https://www.prominic.net) for details on our code of conduct, and the process for submitting pull requests to us.
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) for the process for submitting pull requests, and our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Authors
-* **Joel Anderson** - *Initial work* - [JoelProminic](https://github.com/JoelProminic)
-* **Justin Hill** - *Initial work* - [JustinProminic](https://github.com/JustinProminic)
-* **Mark Gilbert** - *Refactor* - [MarkProminic](https://github.com/MarkProminic)
 
-See also the list of [contributors](https://github.com/STARTcloud/core_provisioner/graphs/contributors) who participated in this project.
+- **Joel Anderson** - *Initial work* - [JoelProminic](https://github.com/JoelProminic)
+- **Justin Hill** - *Initial work* - [JustinProminic](https://github.com/JustinProminic)
+- **Mark Gilbert** - *Refactor* - [Makr91](https://github.com/Makr91)
+
+See also [AUTHORS.md](AUTHORS.md) and the list of [contributors](https://github.com/STARTcloud/core_provisioner/graphs/contributors).
 
 ## License
 
-This project is licensed under the SSLP v3 License - see the [LICENSE.md](LICENSE.md) file for details
+This project is licensed under the GNU Affero General Public License v3 - see the [LICENSE.md](LICENSE.md) file for details.
 
 ## Acknowledgments
 
-* Hat tip to anyone whose code was used
+See [ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md).

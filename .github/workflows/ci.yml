@@ -1,0 +1,57 @@
+name: CI
+
+# Reusable CI. Called by release-please.yml on push to main, and run directly on
+# every PR. Ruby syntax checks + the legacy-marker tripwire, then chains CodeQL —
+# same layout as startcloud_generic_provisioner / hyperweaver-ui.
+
+on:
+  workflow_call:
+  pull_request:
+    branches: ['main']
+
+permissions:
+  contents: read
+  security-events: write
+  packages: read
+  actions: read
+
+jobs:
+  ruby-syntax:
+    name: Ruby Syntax
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+
+      - name: Syntax-check Hosts.rb, version.rb and the Vagrantfile
+        run: |
+          ruby -c Hosts.rb
+          ruby -c version.rb
+          ruby -c Vagrantfile
+
+  legacy-markers:
+    name: Legacy Marker Tripwire
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Fail on ::TOKEN:: legacy markers
+        # The platform templates are Jinja2-only; the old ::UPPERCASE:: token
+        # syntax is dead and must never reappear in shipped files.
+        run: |
+          if grep -rnE '::[A-Z_]+::' --exclude-dir=.git --exclude-dir=.github .; then
+            echo "Legacy ::TOKEN:: markers found — Jinja2 is the only template syntax." >&2
+            exit 1
+          fi
+          echo "No legacy markers found."
+
+  codeql-analysis:
+    name: CodeQL
+    needs: [ruby-syntax, legacy-markers]
+    uses: ./.github/workflows/codeql.yml

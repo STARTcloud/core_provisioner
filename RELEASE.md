@@ -1,24 +1,25 @@
 # Release process
 
-This is Core Provisioner current release process
+Releases are fully automated by GitHub Actions — no manual steps beyond merging.
 
-## Prepare the release
+## How a release happens
 
-Github Actions now handles the release cycle. We are using SemVer Verision and Convential Commits to ensure that we can use our Commits in our CI/CD Workflow
+1. Commits land on `main` using [Conventional Commits](https://www.conventionalcommits.org/):
+   - `fix: ...` bumps the patch version
+   - `feat: ...` bumps the minor version
+2. On every push to `main`, the `Release Please` workflow runs CI (Ruby syntax checks, the legacy-marker tripwire, CodeQL), then [release-please](https://github.com/googleapis/release-please) opens or updates a release PR that:
+   - bumps `version.rb`
+   - updates `CHANGELOG.md`
+3. Merging the release PR creates the GitHub release and a plain `v<version>` tag.
+4. The `Build Core Artifact` workflow then checks out the tag and uploads four assets to the release:
+   - `core_provisioner-<version>.tar.gz` + `.sha256` — the immutable, versioned skeleton archive consumers pin
+   - `core_provisioner.tar.gz` + `.sha256` — a version-less copy at a stable URL
 
-To push a fix and have it automatically publish, ie a the Patch digit in Version string, prefix your commit header with "fix:  Some Commit Message"
+## Guarantees
 
-To push a feature, ie a the feature digit in Version string, prefix your commit header with "feat:  Some Commit Message"
+- **Tag ↔ version lockstep**: the build fails if `version.rb` does not match the version being released.
+- **Immutable assets**: rebuilds via manual dispatch check out the release tag — never `main` HEAD — so republished assets are byte-identical and published checksums never change.
 
-Doing so will cause GitHub Actions to perform the following
-* Update the version in "core/version.rb"
-* Update the version in CHANGELOG.md
-* Create a Release and Corresponding tag
-* Push the package to the GPR and Ruby Gems
+## Rebuilding an existing release's assets
 
-If you are project maintainer, you may also run a manual build if you want to build an artifact without releasing a production publication.
-
-The CHANGELOG.md will be automatically maintained in a similar format to Vagrant by the Github Action Release-Please:
-
-https://github.com/mitchellh/vagrant/blob/master/CHANGELOG.md
-
+Run the `Build Core Artifact` workflow via manual dispatch with the release's `version` (for example `0.2.8`) and `tag_name` (for example `v0.2.8`).

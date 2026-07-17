@@ -7,10 +7,10 @@
             "bump-patch-for-minor-pre-major": true,
             "package-name": "core_provisioner",
             "draft": false,
-            "version-file": "core/version.rb",
+            "version-file": "version.rb",
+            "include-component-in-tag": false,
             "prerelease": false,
-            "default-branch" : "main",
-            "component": "core_provisioner"
+            "default-branch": "main"
         }
     },
     "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json"

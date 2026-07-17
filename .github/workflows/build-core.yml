@@ -1,0 +1,96 @@
+name: Build Core Artifact
+
+# Reusable: called by release-please.yml when a release is created, and available
+# via manual dispatch to rebuild an existing release's assets. Both paths check
+# out the TAG — never main HEAD — so a rebuild reproduces the released bytes
+# (published checksums must never change).
+#
+# Publishes the core skeleton for provisioner build CIs (and the Vagrantfile
+# self-bootstrap) to fetch at an exact pinned version:
+#   core_provisioner-<version>.tar.gz        versioned archive (immutable pin)
+#   core_provisioner.tar.gz                  version-less copy at a stable URL
+#   <asset>.sha256                           sidecar per archive, verified after download
+# The archive carries the skeleton files at its root (Hosts.rb, version.rb,
+# Vagrantfile, ssh_keys/, examples/, LICENSE.md) so consumers extract it
+# straight into their driver directory.
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version to build (must match version.rb)'
+        required: true
+        type: string
+      tag_name:
+        description: 'GitHub release tag'
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (must match version.rb)'
+        required: true
+        type: string
+      tag_name:
+        description: 'GitHub release tag'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-upload:
+    name: Build & Upload
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the release tag
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag_name }}
+
+      - name: Stage skeleton and build archives
+        id: stage
+        run: |
+          NAME="core_provisioner"
+          VERSION="$(sed -nE "s/^[[:space:]]*VERSION = '([0-9]+\.[0-9]+\.[0-9]+[0-9A-Za-z.+-]*)'.*/\1/p" version.rb | head -n1)"
+          echo "Parsed version=$VERSION"
+          if [ "$VERSION" != "${{ inputs.version }}" ]; then
+            echo "version.rb ($VERSION) does not match requested version (${{ inputs.version }})" >&2
+            exit 1
+          fi
+          STAGE="$RUNNER_TEMP/stage"
+          mkdir -p "$STAGE"
+          rsync -a \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='.gitignore' \
+            --exclude='.gitattributes' \
+            --exclude='release-please-config.json' \
+            --exclude='.release-please-manifest.json' \
+            --exclude='CHANGELOG.md' \
+            --exclude='README.md' \
+            --exclude='RELEASE.md' \
+            --exclude='SECURITY.md' \
+            --exclude='SUPPORT.md' \
+            --exclude='CODE_OF_CONDUCT.md' \
+            --exclude='CONTRIBUTING.md' \
+            --exclude='AUTHORS.md' \
+            --exclude='ACKNOWLEDGMENTS.md' \
+            ./ "$STAGE/"
+          tar -czf "$NAME-$VERSION.tar.gz" -C "$STAGE" .
+          cp "$NAME-$VERSION.tar.gz" "$NAME.tar.gz"
+          sha256sum "$NAME-$VERSION.tar.gz" > "$NAME-$VERSION.tar.gz.sha256"
+          sha256sum "$NAME.tar.gz" > "$NAME.tar.gz.sha256"
+          echo "artifact=$NAME-$VERSION.tar.gz" >> "$GITHUB_OUTPUT"
+          echo "latest_artifact=$NAME.tar.gz" >> "$GITHUB_OUTPUT"
+
+      - name: Upload archives to the release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ inputs.tag_name }}" \
+            "${{ steps.stage.outputs.artifact }}" \
+            "${{ steps.stage.outputs.artifact }}.sha256" \
+            "${{ steps.stage.outputs.latest_artifact }}" \
+            "${{ steps.stage.outputs.latest_artifact }}.sha256" --clobber

@@ -2,15 +2,47 @@
 
 ## Supported Versions
 
-These versions are in active development, prior verisions are not supported.
-
-| Version   | Supported          |
-| -------   | ------------------ |
-| 0.2.3     | :white_check_mark: |
-| 0.2.2     | :white_check_mark: |
+Only the latest release is supported. Always consume the newest tagged version.
 
 ## Reporting a Vulnerability
 
-Please report all vulnerabilites in the Github [Issues](https://github.com/STARTcloud/core_provisioner/) for this project.
+**Please do not report security vulnerabilities through public GitHub issues.**
 
-Should a Issue be marked a vulnerability, it will be moved to the highest priorty workflow to resolve.
+### Preferred Method: Security Advisory
+
+1. Go to the [GitHub Security Advisory page](https://github.com/STARTcloud/core_provisioner/security/advisories)
+2. Click "Report a vulnerability"
+3. Fill out the advisory form with detailed information
+4. Submit the advisory
+
+### What to Include
+
+- **Description** of the vulnerability
+- **Steps to reproduce** the issue
+- **Potential impact** of the vulnerability
+- **Affected versions** (if known)
+- **Suggested fix** (if you have one)
+
+## Response Process
+
+Due to limited development resources:
+
+- **Initial Response**: we aim to acknowledge receipt within 48–72 hours
+- **Assessment**: initial assessment within about a week
+- **Resolution**: timeline depends on severity, typically 1–4 weeks
+- **Disclosure**: coordinated disclosure after a fix is available
+
+## Focus Areas
+
+Core Provisioner is a Vagrant driver that runs on a developer or build host. The security-relevant areas are:
+
+- **The bootstrap SSH keypair** (`ssh_keys/`) — deliberately public, exactly like Vagrant's well-known insecure key. It exists only to reach a freshly booted box. Machines that keep it reachable after provisioning are misconfigured: enable `vagrant_ssh_insert_key` so the key is rotated and synced back at provision time.
+- **`Hosts.yml` is trusted input** — values from it are interpolated into provider and shell commands on the host. Only run configurations you wrote or trust.
+- **Release integrity** — release assets are immutable and ship `.sha256` sidecars; consumers must verify checksums after download.
+- **Supply chain** — Dependabot and CodeQL run against this repository.
+
+## Acknowledgments
+
+Contributors who responsibly report security vulnerabilities will be acknowledged here (with their permission):
+
+- _No vulnerabilities reported yet_

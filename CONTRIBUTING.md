@@ -1,97 +1,56 @@
-## Contributing
+# Contributing to Core Provisioner
 
-1. Fork it
-2. Create your feature branch (`git checkout -b my-new-feature`)
-3. Commit your RuboCop-compliant and test-passing changes (`git commit -am 'Add
-   some feature'`)
-4. Push to the branch (`git push origin my-new-feature`)
-5. Create new Pull Request
+Thank you for your interest in contributing to Core Provisioner! Community contributions directly impact the pace of feature development and bug fixes.
 
-## Versioning
+## How to Contribute
 
-This plugin follows the principles of
-[Semantic Versioning 2.0.0](http://semver.org/).
+### Reporting Issues
 
-## Unit Tests
+Before creating an issue, please:
 
-Please run the unit tests to verify your changes. To do this simply run `rake`.
-If you want a quick merge, write a spec that fails before your changes are
-applied and that passes after.
+1. **Search existing issues** to avoid duplicates
+2. **Use the appropriate issue template** (bug report, feature request, question)
+3. **Provide detailed information** — the relevant `Hosts.yml` portion (redact secrets), steps to reproduce, expected vs. actual behavior
+4. **Include environment details** (host OS, Vagrant version, provider + version)
 
-If you don't have rake installed, first install [bundler](http://bundler.io/)
-and run `bundle install`. Then you can run `bundle exec rake`, even if rake is
-still not installed to your `PATH`.
+### Submitting Pull Requests
 
-## RuboCop
+1. **Fork the repository** and create your feature branch from `main`
+2. **Keep changes focused** and write commit messages using [Conventional Commits](https://www.conventionalcommits.org/) — release-please builds the changelog and version bumps from them (`fix:` = patch, `feat:` = minor)
+3. **Make sure CI passes**: `ruby -c Hosts.rb version.rb Vagrantfile` must be clean, and no legacy `::TOKEN::` markers may appear anywhere
+4. **Fill out the pull request template** completely
 
-Please make changes [RuboCop](https://github.com/bbatsov/rubocop)-compliant.
+### Testing Changes
 
-Changes that eliminate rules from
-[`.rubocop_todo.yml`](https://github.com/nsidc/vagrant-zones/blob/master/.rubocop_todo.yml)
-are welcome.
+There is no unit test suite — the driver is exercised by real `vagrant up` runs. Before submitting:
 
-## Travis-CI
+1. Test with a real `Hosts.yml` (start from `examples/Hosts.yml`)
+2. State in the PR which providers you tested (VirtualBox, UTM, Bhyve/zones)
+3. Call out anything that changes the `Hosts.yml` schema or affects downstream provisioners consuming the released skeleton
 
-[Travis](https://travis-ci.org/nsidc/vagrant-zones) will automatically run
-RuboCop and the unit tests when you create a new pull request. If there are any
-failures, a notification will appear on the pull request. To update your pull
-request, simply create a new commit on the branch that fixes the failures, and
-push to the branch.
+### What We're Looking For
 
-## Development Without Building the Plugin
+- Bug fixes, especially provider-specific ones
+- Provider support improvements (VirtualBox, UTM, vagrant-zones)
+- Better error handling and clearer provisioning output
+- Documentation improvements
 
-To test your changes when developing the plugin, you have two main
-options. First, you can build and install the plugin from source every time you
-make a change:
+## Response Times and Review Process
 
-1. Make changes
-2. `rake build`
-3. `vagrant plugin install ./pkg/vagrant-zones-$VERSION.gem`
-4. `vagrant up --provider=zones`
+Due to limited development resources:
 
-Second, you can use Bundler and the Vagrant gem to execute vagrant commands,
-saving time as you never have to wait for the plugin to build and install:
+- **Issue responses**: we aim to acknowledge new issues within a few days
+- **Pull request reviews**: may take time depending on complexity and workload
+- **Documentation updates**: generally reviewed quickly as they're high-impact, low-risk
 
-1. Make changes
-2. `bundle exec vagrant up --provider=zones`
+## Recognition
 
-This method uses the version of Vagrant specified in
-[`Gemfile`](https://github.com/nsidc/vagrant-zones/blob/master/Gemfile). It
-will also cause Bundler and Vagrant to output warnings every time you run
-`bundle exec vagrant`, because `Gemfile` lists **vagrant-zones** twice (once
-with `gemspec` and another time in the `group :plugins` block), and Vagrant
-prefers to be run from the official installer rather than through the gem.
+All contributors are recognized in our [AUTHORS.md](AUTHORS.md) file.
 
-Despite those warning messages, this is the
-[officially recommended](https://docs.vagrantup.com/v2/plugins/development-basics.html)
-method for Vagrant plugin development.
+## Code of Conduct
 
-## Committing
+This project follows our [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you agree to abide by its terms.
 
-The Conventional Commits specification is a lightweight convention on top of commit messages. It provides an easy set of rules for creating an explicit commit history; which makes it easier to write automated tools on top of. This convention dovetails with SemVer, by describing the features, fixes, and breaking changes made in commit messages.
+## License
 
-* [Conventional Commits](https://github.com/conventional-commits/conventionalcommits.org/blob/master/content/v1.0.0/index.md)
-* [SemVer](https://semver.org/)
-* [Better Committing Practices](https://riptutorial.com/git/example/4729/good-commit-messages)
-
-## Releasing
-
-1) Ensure [travis-ci](https://travis-ci.org/github/nsidc/vagrant-zones/) build is passing
-2) Ensure `CHANGELOG.md` is up-to-date with the changes to release
-3) Update version in the code, according to [semver](https://semver.org/)
-    * [bumpversion](https://github.com/peritus/bumpversion) can be used; if not,
-      the version needs to be manually updated in `.bumpversion.cfg`,
-      `README.md`, and `lib/zones/version.rb` (e.g., as in
-      [`11eced2`](https://github.com/nsidc/vagrant-zones/commit/11eced2))
-4) `bundle exec rake build`
-    * builds the plugin to `pkg/vagrant-zones-$VERSION.gem`
-    * install to your system vagrant for further testing with `vagrant plugin
-      install ./pkg/vagrant-zones-$VERSION.gem`
-5) `bundle exec rake release`
-    * creates the version tag and pushes it to GitHub
-    * pushes the built gem to
-      [RubyGems.org](https://rubygems.org/gems/vagrant-zones/)
-6) Update the [Releases page](https://github.com/nsidc/vagrant-zones/releases)
-    * the release name should match the version tag (e.g., `v1.2.3`)
-    * the release description can be the same as the `CHANGELOG.md` entry
-    * upload the `.gem` from RubyGems.org as an attached binary for the release
+By contributing to Core Provisioner, you agree that your contributions will be licensed under the [GNU AGPL v3](LICENSE.md).
