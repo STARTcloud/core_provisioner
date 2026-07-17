@@ -43,9 +43,11 @@ jobs:
 
       - name: 'Fail on ::TOKEN:: legacy markers'
         # The platform templates are Jinja2-only; the old ::UPPERCASE:: token
-        # syntax is dead and must never reappear in shipped files.
+        # syntax is dead and must never reappear in shipped files. The pattern
+        # requires standalone tokens so Ruby namespacing (Net::HTTP::Get) never
+        # false-positives: a marker is not glued to identifier characters.
         run: |
-          if grep -rnE '::[A-Z_]+::' --exclude-dir=.git --exclude-dir=.github .; then
+          if grep -rnE '(^|[^A-Za-z0-9_:])::[A-Z_]+::([^A-Za-z0-9_:]|$)' --exclude-dir=.git --exclude-dir=.github .; then
             echo "Legacy ::TOKEN:: markers found — Jinja2 is the only template syntax." >&2
             exit 1
           fi
