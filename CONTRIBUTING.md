@@ -17,7 +17,7 @@ Before creating an issue, please:
 
 1. **Fork the repository** and create your feature branch from `main`
 2. **Keep changes focused** and write commit messages using [Conventional Commits](https://www.conventionalcommits.org/) — release-please builds the changelog and version bumps from them (`fix:` = patch, `feat:` = minor)
-3. **Make sure CI passes**: `ruby -c Hosts.rb version.rb Vagrantfile` must be clean, and no legacy `::TOKEN::` markers may appear anywhere
+3. **Make sure CI passes**: `ruby -c Hosts.rb version.rb Vagrantfile` must be clean, and no legacy double-colon token markers (the old SHI template syntax) may appear anywhere
 4. **Fill out the pull request template** completely
 
 ### Testing Changes
