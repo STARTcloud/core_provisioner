@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.12](https://github.com/STARTcloud/core_provisioner/compare/v0.2.11...v0.2.12) (2026-07-17)
+
+
+### Features
+
+* drop the ssls seeding design - driver/ssls is synced directly to /secure ([247f463](https://github.com/STARTcloud/core_provisioner/commit/247f4632a3222d4dd27cc0ef376490d13519a4d0))
+
+
+### Bug Fixes
+
+* new dev root CA (key offline) and scheduled SSH/SSL credential rotation ([b675dad](https://github.com/STARTcloud/core_provisioner/commit/b675dad35fa35ababfe5e1ab2a3fd3174de08683))
+* rotate bootstrap SSH keypair and dev PKI material ([acea463](https://github.com/STARTcloud/core_provisioner/commit/acea463c227d1e20712e9f7d9b06b93c0e021dca))
+* rotate bootstrap SSH keypair and dev PKI material ([64dc52b](https://github.com/STARTcloud/core_provisioner/commit/64dc52b06738592dae790486fc4afbf894ffd4f6))
+
 ## [0.2.11](https://github.com/STARTcloud/core_provisioner/compare/v0.2.10...v0.2.11) (2026-07-17)
 
 
