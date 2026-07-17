@@ -680,21 +680,13 @@ class Hosts
                   puts "#{ prefix }     #{ open_url }"
                   system("echo '" + open_url + "' > .vagrant/done.txt")
 
-                  ## For CI/CD Automation Purposes Only
-                  if host['settings']['debug_build']
-                    puts "#{ prefix } Transferring Hosts Template back to Host"
-                    id_transfer_cmd = "vagrant ssh -c 'cat /vagrant/ansible/Hosts.template.yml' > ./templates/Hosts.template.yml"
-                    id_transfer_cmd = "vagrant scp :/vagrant/ansible/Hosts.template.yml ./templates/Hosts.template.yml" if Vagrant.has_plugin?("vagrant-scp-sync")
-                    system(id_transfer_cmd)
-                  end
-
                   ## Copy the Updated Key from the VM, and then Delete the default Template Key from the VM
                   if host['settings']['vagrant_ssh_insert_key']
                     puts "#{ prefix } Transferring New SSH key"
-                    id_transfer_cmd = "vagrant ssh -c 'cat /home/startcloud/.ssh/id_ssh_rsa' > #{host['settings']['vagrant_user_private_key_path']}"
-                    id_transfer_cmd = "vagrant scp :/home/startcloud/.ssh/id_ssh_rsa #{host['settings']['vagrant_user_private_key_path']}" if Vagrant.has_plugin?("vagrant-scp-sync")
+                    id_transfer_cmd = "vagrant ssh -c 'cat /home/#{host['settings']['vagrant_user']}/.ssh/id_ssh_rsa' > #{host['settings']['vagrant_user_private_key_path']}"
+                    id_transfer_cmd = "vagrant scp :/home/#{host['settings']['vagrant_user']}/.ssh/id_ssh_rsa #{host['settings']['vagrant_user_private_key_path']}" if Vagrant.has_plugin?("vagrant-scp-sync")
                     system(id_transfer_cmd)
-                    system(%x(vagrant ssh -c "sed -i '/vagrantup/d' /home/startcloud/.ssh/id_ssh_rsa"))
+                    system(%x(vagrant ssh -c "sed -i '/vagrantup/d' /home/#{host['settings']['vagrant_user']}/.ssh/id_ssh_rsa"))
                   end
                 end
               else
