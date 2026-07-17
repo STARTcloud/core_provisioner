@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.11](https://github.com/STARTcloud/core_provisioner/compare/v0.2.10...v0.2.11) (2026-07-17)
+
+
+### Features
+
+* adding the default SSLs ([66efff4](https://github.com/STARTcloud/core_provisioner/commit/66efff4ea62a1222305da4ccf7f02c3ca7336d93))
+
 ## [0.2.10](https://github.com/STARTcloud/core_provisioner/compare/v0.2.9...v0.2.10) (2026-07-17)
 
 
