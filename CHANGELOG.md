@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.10](https://github.com/STARTcloud/core_provisioner/compare/v0.2.9...v0.2.10) (2026-07-17)
+
+
+### Features
+
+* driver-shaped releases with self-bootstrapping Vagrantfile and ssls seed ([62d7f7e](https://github.com/STARTcloud/core_provisioner/commit/62d7f7ed3acd484a387a400686b039f95b1803cf))
+* driver-shaped releases with self-bootstrapping Vagrantfile and ssls seed ([284fd6c](https://github.com/STARTcloud/core_provisioner/commit/284fd6cb522a2d8cf049a6dccb9a3530805b1a00))
+
 ## [0.2.9](https://github.com/STARTcloud/core_provisioner/compare/v0.2.8...v0.2.9) (2026-07-17)
 
 
