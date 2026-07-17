@@ -36,7 +36,7 @@ driver_dir = File.join(root, 'driver')
 unless File.file?(File.join(driver_dir, 'Hosts.rb'))
   pin_file = File.join(root, 'driver.version')
   unless File.file?(pin_file)
-    raise "driver/ is missing and no driver.version pin file exists — create driver.version containing the pinned core_provisioner release tag (for example: v0.3.0)"
+    raise "driver/ is missing and no driver.version pin file exists — create driver.version containing the pinned core_provisioner release tag (for example: v0.2.10)"
   end
 
   tag = File.read(pin_file).strip

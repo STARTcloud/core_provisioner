@@ -42,13 +42,13 @@ Each release publishes fetchable archives as GitHub release assets:
 The archive's top-level directory is `driver/` — one untar at the consumer's repo root and the driver materializes:
 
 ```bash
-sha256sum -c core_provisioner-0.3.0.tar.gz.sha256
-tar -xzf core_provisioner-0.3.0.tar.gz
+sha256sum -c core_provisioner-0.2.10.tar.gz.sha256
+tar -xzf core_provisioner-0.2.10.tar.gz
 ```
 
 Consumers never commit `driver/`. It is gitignored and materializes two ways, both driven by the same pin:
 
-- **At build**: the provisioner's build CI reads the repo's `driver.version` pin file (one line: the release tag, e.g. `v0.3.0`), downloads that exact archive, verifies the sidecar, and stages `driver/` into the release artifact — including the non-clobbering `ssls/` seed copy.
+- **At build**: the provisioner's build CI reads the repo's `driver.version` pin file (one line: the release tag, e.g. `v0.2.10`), downloads that exact archive, verifies the sidecar, and stages `driver/` into the release artifact — including the non-clobbering `ssls/` seed copy.
 - **At dev time**: the shipped `Vagrantfile` self-bootstraps — when `driver/` is missing it performs the same pinned fetch, verify, and extract, seeds `ssls/`, then requires `driver/Hosts.rb`.
 
 Released provisioners must pin an exact core version — never a floating branch — so their release artifacts stay byte-reproducible.
