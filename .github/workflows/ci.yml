@@ -41,7 +41,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
-      - name: Fail on ::TOKEN:: legacy markers
+      - name: 'Fail on ::TOKEN:: legacy markers'
         # The platform templates are Jinja2-only; the old ::UPPERCASE:: token
         # syntax is dead and must never reappear in shipped files.
         run: |
