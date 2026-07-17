@@ -5,7 +5,9 @@
 version: 2
 updates:
   - package-ecosystem: 'github-actions'
-    directory: '/.github/workflows'
+    # '/' is the documented value for github-actions — Dependabot scans
+    # .github/workflows from the repo root itself.
+    directory: '/'
     schedule:
       interval: 'weekly'
       day: 'monday'
