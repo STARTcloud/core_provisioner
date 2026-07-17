@@ -42,8 +42,8 @@ Each release publishes fetchable archives as GitHub release assets:
 The archive's top-level directory is `driver/` — one untar at the consumer's repo root and the driver materializes:
 
 ```bash
-sha256sum -c core_provisioner-0.2.10.tar.gz.sha256
-tar -xzf core_provisioner-0.2.10.tar.gz
+sha256sum -c core_provisioner-0.3.0.tar.gz.sha256
+tar -xzf core_provisioner-0.3.0.tar.gz
 ```
 
 Consumers never commit `driver/`. It is gitignored and materializes two ways, both driven by the same pin:
