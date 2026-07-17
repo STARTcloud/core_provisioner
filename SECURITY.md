@@ -37,7 +37,7 @@ Due to limited development resources:
 Core Provisioner is a Vagrant driver that runs on a developer or build host. The security-relevant areas are:
 
 - **The bootstrap SSH keypair** (`ssh_keys/`) — deliberately public, exactly like Vagrant's well-known insecure key. It exists only to reach a freshly booted box. Machines that keep it reachable after provisioning are misconfigured: enable `vagrant_ssh_insert_key` so the key is rotated and synced back at provision time.
-- **The certificate seed** (`ssls/`) — a deliberately public development CA and default-signed pair, seeded into consumer working copies non-clobbering. It exists so dev machines have working TLS out of the box. Never add it to a production trust store; bring your own certificates (they always win over seed material).
+- **The certificate set** (`ssls/`) — a deliberately public development CA and default-signed pair, shipped inside the driver and synced to `/secure/` on dev machines. It exists so dev machines have working TLS out of the box. Never add it to a production trust store; bring your own certificates by replacing the files in the working copy's `driver/ssls/`.
 - **`Hosts.yml` is trusted input** — values from it are interpolated into provider and shell commands on the host. Only run configurations you wrote or trust.
 - **Release integrity** — release assets are immutable and ship `.sha256` sidecars; consumers must verify checksums after download.
 - **Supply chain** — Dependabot and CodeQL run against this repository.

@@ -7,7 +7,6 @@
 ## build CI — always an exact tag, never a floating branch.
 require 'yaml'
 require 'digest'
-require 'fileutils'
 require 'net/http'
 require 'uri'
 require 'tmpdir'
@@ -36,7 +35,7 @@ driver_dir = File.join(root, 'driver')
 unless File.file?(File.join(driver_dir, 'Hosts.rb'))
   pin_file = File.join(root, 'driver.version')
   unless File.file?(pin_file)
-    raise "driver/ is missing and no driver.version pin file exists — create driver.version containing the pinned core_provisioner release tag (for example: v0.2.10)"
+    raise "driver/ is missing and no driver.version pin file exists — create driver.version containing the pinned core_provisioner release tag (for example: v0.2.11)"
   end
 
   tag = File.read(pin_file).strip
@@ -56,19 +55,6 @@ unless File.file?(File.join(driver_dir, 'Hosts.rb'))
     raise "Checksum mismatch for #{archive_name}: expected #{expected}, got #{actual}" unless expected == actual
 
     system('tar', '-xzf', archive, '-C', root) || raise("Extraction of #{archive_name} failed")
-  end
-
-  ## Seed shared certificate material from the driver, non-clobbering:
-  ## a user's own files in ./ssls/ always win over seed material.
-  Dir.glob(File.join(driver_dir, 'ssls', '**', '*')).each do |seed|
-    next unless File.file?(seed)
-
-    rel = seed.sub(/\A#{Regexp.escape(driver_dir)}\/?/, '')
-    dest = File.join(root, rel)
-    next if File.exist?(dest)
-
-    FileUtils.mkdir_p(File.dirname(dest))
-    FileUtils.cp(seed, dest)
   end
 end
 
