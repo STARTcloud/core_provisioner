@@ -26,9 +26,10 @@ Core Provisioner is the shared Vagrant driver ("the skeleton") used by every STA
 | File | Purpose |
 | ---- | ------- |
 | `Hosts.rb` | The driver. Parses `Hosts.yml` and configures VirtualBox, UTM, and Bhyve/zones machines end to end |
-| `Vagrantfile` | Consumer-facing stub. Lives at a provisioner's repo root and requires the skeleton's `Hosts.rb` from `core/` |
+| `Vagrantfile` | Consumer-facing stub with the driver self-bootstrap. Lives at a provisioner's repo root: when `driver/` is missing it fetches the release pinned in `driver.version`, verifies its `.sha256` sidecar, extracts, seeds `ssls/`, then requires the driver's `Hosts.rb` |
 | `version.rb` | `CoreProvisioner::VERSION` — stamped into every provision's Ansible `extra_vars` and managed by release-please |
 | `ssh_keys/` | The well-known bootstrap keypair. Insecure by design (like Vagrant's insecure key) — replaced at provision time when `vagrant_ssh_insert_key` is enabled |
+| `ssls/` | Shared development CA + default-signed certificate seed. Copied into a consumer's `ssls/` non-clobbering (at build staging and by the Vagrantfile bootstrap) — a user's own certificate material always wins |
 | `examples/Hosts.yml` | A complete, commented example configuration |
 
 ## Consuming the skeleton
@@ -38,20 +39,21 @@ Each release publishes fetchable archives as GitHub release assets:
 - `core_provisioner-<version>.tar.gz` — the immutable, versioned archive. Pin an exact version and verify the `.sha256` sidecar after download.
 - `core_provisioner.tar.gz` — a version-less copy at a stable URL (`releases/latest/download/core_provisioner.tar.gz`) for quick starts.
 
-The archive carries the skeleton files at its root, so a consumer stages it straight into its driver directory (today `core/`):
+The archive's top-level directory is `driver/` — one untar at the consumer's repo root and the driver materializes:
 
 ```bash
-curl -fsSL -o core_provisioner-0.2.8.tar.gz \
-  https://github.com/STARTcloud/core_provisioner/releases/download/v0.2.8/core_provisioner-0.2.8.tar.gz
-curl -fsSL -o core_provisioner-0.2.8.tar.gz.sha256 \
-  https://github.com/STARTcloud/core_provisioner/releases/download/v0.2.8/core_provisioner-0.2.8.tar.gz.sha256
-sha256sum -c core_provisioner-0.2.8.tar.gz.sha256
-mkdir -p core && tar -xzf core_provisioner-0.2.8.tar.gz -C core
+sha256sum -c core_provisioner-0.3.0.tar.gz.sha256
+tar -xzf core_provisioner-0.3.0.tar.gz
 ```
+
+Consumers never commit `driver/`. It is gitignored and materializes two ways, both driven by the same pin:
+
+- **At build**: the provisioner's build CI reads the repo's `driver.version` pin file (one line: the release tag, e.g. `v0.3.0`), downloads that exact archive, verifies the sidecar, and stages `driver/` into the release artifact — including the non-clobbering `ssls/` seed copy.
+- **At dev time**: the shipped `Vagrantfile` self-bootstraps — when `driver/` is missing it performs the same pinned fetch, verify, and extract, seeds `ssls/`, then requires `driver/Hosts.rb`.
 
 Released provisioners must pin an exact core version — never a floating branch — so their release artifacts stay byte-reproducible.
 
-> The legacy `submodule` branch still exists for consumers that haven't cut over from `git submodule` consumption yet. New consumers should use release archives.
+`Hosts.rb` resolves its own paths, so the mount directory name is free — consumers still on the legacy `submodule` branch keep mounting it as `core/` and nothing breaks. New consumers should use release archives.
 
 ## How it fits together
 

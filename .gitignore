@@ -12,6 +12,11 @@ support-bundle.zip
 disks/
 *.vdi
 
+# Driver bootstrap artifacts (dev-local testing of the stub in this repo;
+# consumers commit their own driver.version — this ignore is core-repo-only)
+driver/
+driver.version
+
 # Tooling
 .claude
 

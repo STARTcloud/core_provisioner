@@ -10,9 +10,10 @@ name: Build Core Artifact
 #   core_provisioner-<version>.tar.gz        versioned archive (immutable pin)
 #   core_provisioner.tar.gz                  version-less copy at a stable URL
 #   <asset>.sha256                           sidecar per archive, verified after download
-# The archive carries the skeleton files at its root (Hosts.rb, version.rb,
-# Vagrantfile, ssh_keys/, examples/, LICENSE.md) so consumers extract it
-# straight into their driver directory.
+# The archive's top-level directory is driver/ (Hosts.rb, version.rb,
+# Vagrantfile, ssh_keys/, ssls/ seed, examples/, LICENSE.md) — consumers untar
+# once at their repo root and driver/ materializes. Hosts.rb resolves its own
+# paths, so holdouts may rename the directory (e.g. core/) freely.
 
 on:
   workflow_call:
@@ -59,7 +60,7 @@ jobs:
             echo "version.rb ($VERSION) does not match requested version (${{ inputs.version }})" >&2
             exit 1
           fi
-          STAGE="$RUNNER_TEMP/stage"
+          STAGE="$RUNNER_TEMP/stage/driver"
           mkdir -p "$STAGE"
           rsync -a \
             --exclude='.git' \
@@ -78,7 +79,7 @@ jobs:
             --exclude='AUTHORS.md' \
             --exclude='ACKNOWLEDGMENTS.md' \
             ./ "$STAGE/"
-          tar -czf "$NAME-$VERSION.tar.gz" -C "$STAGE" .
+          tar -czf "$NAME-$VERSION.tar.gz" -C "$RUNNER_TEMP/stage" driver
           cp "$NAME-$VERSION.tar.gz" "$NAME.tar.gz"
           sha256sum "$NAME-$VERSION.tar.gz" > "$NAME-$VERSION.tar.gz.sha256"
           sha256sum "$NAME.tar.gz" > "$NAME.tar.gz.sha256"

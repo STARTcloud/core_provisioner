@@ -12,7 +12,7 @@ Releases are fully automated by GitHub Actions — no manual steps beyond mergin
    - updates `CHANGELOG.md`
 3. Merging the release PR creates the GitHub release and a plain `v<version>` tag.
 4. The `Build Core Artifact` workflow then checks out the tag and uploads four assets to the release:
-   - `core_provisioner-<version>.tar.gz` + `.sha256` — the immutable, versioned skeleton archive consumers pin
+   - `core_provisioner-<version>.tar.gz` + `.sha256` — the immutable, versioned skeleton archive consumers pin (top-level directory: `driver/`)
    - `core_provisioner.tar.gz` + `.sha256` — a version-less copy at a stable URL
 
 ## Guarantees

@@ -42,7 +42,9 @@ class Hosts
         server.ssh.username = host['settings']['vagrant_user']
         config.vm.ignore_box_vagrantfile = host['settings'].key?('vagrant_ignore_box_vagrantfile') ? host['settings']['vagrant_ignore_box_vagrantfile'] : true
         #server.ssh.password = host['settings']['vagrant_user_pass']
-        default_ssh_key = "./core/ssh_keys/id_rsa"
+        # Resolved relative to this file so the driver works under any mount
+        # directory name (driver/, core/, ...).
+        default_ssh_key = File.join(File.dirname(__FILE__), 'ssh_keys', 'id_rsa')
         vagrant_ssh_key = host['settings']['vagrant_user_private_key_path']
         server.ssh.private_key_path = File.exist?(vagrant_ssh_key) ? [vagrant_ssh_key, default_ssh_key] : default_ssh_key
         server.ssh.insert_key = false # host['settings']['vagrant_ssh_insert_key'], Note we are no longer automatically forcing the key in via Vagrants SSH insertion function
