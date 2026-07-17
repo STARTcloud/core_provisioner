@@ -1,5 +1,6 @@
 ## Don't save secrets
 .secrets.yml
+root-ca.key
 
 ## Don't save log files
 *.log
