@@ -42,8 +42,6 @@ class Hosts
         server.ssh.username = host['settings']['vagrant_user']
         config.vm.ignore_box_vagrantfile = host['settings'].key?('vagrant_ignore_box_vagrantfile') ? host['settings']['vagrant_ignore_box_vagrantfile'] : true
         #server.ssh.password = host['settings']['vagrant_user_pass']
-        # Resolved relative to this file so the driver works under any mount
-        # directory name (driver/, core/, ...).
         default_ssh_key = File.join(File.dirname(__FILE__), 'ssh_keys', 'id_rsa')
         vagrant_ssh_key = host['settings']['vagrant_user_private_key_path']
         server.ssh.private_key_path = File.exist?(vagrant_ssh_key) ? [vagrant_ssh_key, default_ssh_key] : default_ssh_key
@@ -243,28 +241,40 @@ class Hosts
           end
         end
 
-        # Create storage controller on first run
         if host.has_key?('disks') && host['disks'].is_a?(Hash) && host['disks'].has_key?('additional_disks') && !host['disks']['additional_disks'].nil? && provider == 'virtualbox'
-          unless File.directory?(disks_directory)
-            config.vm.provider "virtualbox" do |storage_provider|
-              host['disks']['additional_disks'].each_with_index do |disks, diskindex|
-                if disks['driver'] == "virtio-scsi"
-                  storage_provider.customize ["storagectl", :id, "--name", "VirtIO Controller", "--add", "virtio-scsi", '--hostiocache', 'off']
+          machine_name = "#{host['settings']['server_id']}--#{host['settings']['hostname']}.#{machine_domain}"
+          machine_id_file = File.join('.vagrant', 'machines', machine_name, 'virtualbox', 'id')
 
-                  break
-                end
+          unless File.exist?(machine_id_file)
+            config.vm.provider "virtualbox" do |storage_provider|
+              storage_provider.customize ["storagectl", :id, "--name", "VirtIO Controller", "--add", "virtio-scsi", '--hostiocache', 'off']
+              host['disks']['additional_disks'].each do |disks|
+                local_disk_filename = File.join(disks_directory, "#{disks['volume_name']}.vdi")
+                storage_provider.customize ['storageattach', :id, '--storagectl', "VirtIO Controller", '--port', disks['port'], '--device', 0, '--type', 'hdd', '--medium', local_disk_filename]
               end
             end
           end
-        end
 
-        # attach storage devices
-        if host.has_key?('disks') && host['disks'].is_a?(Hash) && host['disks'].has_key?('additional_disks') && !host['disks']['additional_disks'].nil? && provider == 'virtualbox'
-          config.vm.provider "virtualbox" do |storage_provider|
-            host['disks']['additional_disks'].each_with_index do |disks, diskindex|
-              local_disk_filename = File.join(disks_directory, "#{disks['volume_name']}.vdi")
-              unless File.exist?(local_disk_filename)
-                storage_provider.customize ['storageattach', :id, '--storagectl', "VirtIO Controller", '--port', disks['port'], '--device', 0, '--type', 'hdd', '--medium', local_disk_filename]
+          config.trigger.before :up do |trigger|
+            trigger.info = "Reconciling additional-disk controller and attachments"
+            trigger.ruby do
+              if File.exist?(machine_id_file)
+                vm_id = File.read(machine_id_file).strip
+                vm_info = `#{path_VBoxManage} showvminfo "#{vm_id}" --machinereadable`
+                vm_state = vm_info[/VMState="(.+?)"/, 1]
+                if ['poweroff', 'aborted'].include?(vm_state)
+                  controllers = vm_info.scan(/storagecontrollername\d+="(.+?)"/).flatten
+                  unless controllers.include?('VirtIO Controller')
+                    system(path_VBoxManage, 'storagectl', vm_id, '--name', 'VirtIO Controller', '--add', 'virtio-scsi', '--hostiocache', 'off')
+                  end
+                  host['disks']['additional_disks'].each do |disks|
+                    local_disk_filename = File.join(disks_directory, "#{disks['volume_name']}.vdi")
+                    next unless File.exist?(local_disk_filename)
+                    attachment = vm_info[/"VirtIO Controller-#{disks['port']}-0"="(.+?)"/, 1]
+                    next unless attachment.nil? || attachment == 'none'
+                    system(path_VBoxManage, 'storageattach', vm_id, '--storagectl', 'VirtIO Controller', '--port', disks['port'].to_s, '--device', '0', '--type', 'hdd', '--medium', local_disk_filename)
+                  end
+                end
               end
             end
           end
@@ -609,7 +619,7 @@ class Hosts
       end
 
       ## Syncback
-      if host.has_key?('folders') && Vagrant.has_plugin?("vagrant-scp-sync")
+      if host.has_key?('folders') && Vagrant.has_plugin?("vagrant-scp-sync") && Vagrant::Util::Which.which('rsync')
         prefix = "==> #{host['settings']['server_id']}--#{host['settings']['hostname']}.#{machine_domain}:"
         host['folders'].each do |folder|
           next unless folder['syncback']
