@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.13](https://github.com/STARTcloud/core_provisioner/compare/v0.2.12...v0.2.13) (2026-07-28)
+
+
+### Bug Fixes
+
+* disk controller managemnet ([6f615ab](https://github.com/STARTcloud/core_provisioner/commit/6f615ab24bda1fe91dc50017055a1b2d99b85e41))
+* fixing the readme ([c32d856](https://github.com/STARTcloud/core_provisioner/commit/c32d85618abe800fa260c5632f65e6967a81f929))
+
 ## [0.2.12](https://github.com/STARTcloud/core_provisioner/compare/v0.2.11...v0.2.12) (2026-07-17)
 
 
