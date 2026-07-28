@@ -54,36 +54,50 @@ jobs:
   # dependency-bump workflow that rewrites its driver.version pin as a fix: PR
   # through its own CI gate. needs build-core so the assets exist before any
   # consumer reacts. Cross-repo dispatch cannot ride GITHUB_TOKEN — the App
-  # token (BOT_APP_ID / BOT_PRIVATE_KEY org secrets) is required. New
-  # consumers: add the repo name to CONSUMERS, nothing else.
+  # token (BOT_APP_ID / BOT_PRIVATE_KEY org secrets) is required, and it mints
+  # per OWNER, so consumers fan out as a matrix: each leg mints an org-scoped
+  # token and dispatches to its one repo. The App must be installed on every
+  # listed org (STARTcloud AND Moonshine-IDE). New consumers: add owner/repo
+  # to the matrix, nothing else.
   notify-consumers:
     name: Notify consumers
     needs: [release-please, build-core]
     if: ${{ needs.release-please.outputs.release_created }}
     runs-on: ubuntu-latest
-    env:
-      CONSUMERS: startcloud_generic_provisioner
+    strategy:
+      fail-fast: false
+      matrix:
+        consumer:
+          - STARTcloud/startcloud_generic_provisioner
+          - Moonshine-IDE/moonshinedev_provisioner_private
     steps:
+      - name: Split owner and repo
+        id: target
+        env:
+          CONSUMER: ${{ matrix.consumer }}
+        run: |
+          echo "owner=${CONSUMER%%/*}" >> "$GITHUB_OUTPUT"
+          echo "repo=${CONSUMER##*/}" >> "$GITHUB_OUTPUT"
+
       - name: Mint App token
         id: app
         uses: actions/create-github-app-token@v2
         with:
           app-id: ${{ secrets.BOT_APP_ID }}
           private-key: ${{ secrets.BOT_PRIVATE_KEY }}
-          owner: STARTcloud
-          repositories: ${{ env.CONSUMERS }}
+          owner: ${{ steps.target.outputs.owner }}
+          repositories: ${{ steps.target.outputs.repo }}
 
-      - name: Dispatch dependency-update to every consumer
+      - name: Dispatch dependency-update
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           TAG: ${{ needs.release-please.outputs.tag_name }}
+          CONSUMER: ${{ matrix.consumer }}
         run: |
           SHA="$(gh api "repos/${{ github.repository }}/commits/$TAG" --jq .sha)"
-          for CONSUMER in ${CONSUMERS//,/ }; do
-            gh api "repos/STARTcloud/$CONSUMER/dispatches" \
-              -f event_type=dependency-update \
-              -f "client_payload[repo]=${{ github.repository }}" \
-              -f "client_payload[tag]=$TAG" \
-              -f "client_payload[sha]=$SHA"
-            echo "Dispatched dependency-update: $CONSUMER <- $TAG"
-          done
+          gh api "repos/$CONSUMER/dispatches" \
+            -f event_type=dependency-update \
+            -f "client_payload[repo]=${{ github.repository }}" \
+            -f "client_payload[tag]=$TAG" \
+            -f "client_payload[sha]=$SHA"
+          echo "Dispatched dependency-update: $CONSUMER <- $TAG"
