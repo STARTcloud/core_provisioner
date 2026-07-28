@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.14](https://github.com/STARTcloud/core_provisioner/compare/v0.2.13...v0.2.14) (2026-07-28)
+
+
+### Bug Fixes
+
+* core provisioner updating notifications ([20f5281](https://github.com/STARTcloud/core_provisioner/commit/20f52816d37c672ae60391bc191b6c690c65a3b0))
+* extended form of the consumers ([6bdb636](https://github.com/STARTcloud/core_provisioner/commit/6bdb6366e0c7e6812a484c48cdc2029e52fd0205))
+
 ## [0.2.13](https://github.com/STARTcloud/core_provisioner/compare/v0.2.12...v0.2.13) (2026-07-28)
 
 
