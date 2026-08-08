@@ -231,6 +231,7 @@ class Hosts
               host['disks']['additional_disks'].each_with_index do |disks, diskindex|
                 local_disk_filename = File.join(disks_directory, "#{disks['volume_name']}.vdi")
                 unless File.exist?(local_disk_filename)
+                  system("#{path_VBoxManage} closemedium disk #{local_disk_filename}", out: File::NULL, err: File::NULL)
                   disk_size_gb = disks['size'].match(/(\d+(\.\d+)?)/)[0].to_f
                   disk_size_mb = (disk_size_gb * 1024).to_i
                   puts "Creating \"#{disks['volume_name']}\" disk with size \"#{disk_size_mb}\" MB (#{disk_size_gb} GB)"
@@ -245,12 +246,22 @@ class Hosts
           machine_name = "#{host['settings']['server_id']}--#{host['settings']['hostname']}.#{machine_domain}"
           machine_id_file = File.join('.vagrant', 'machines', machine_name, 'virtualbox', 'id')
 
-          unless File.exist?(machine_id_file)
+          machine_registered = false
+          if File.exist?(machine_id_file)
+            registered_vm_id = File.read(machine_id_file).strip
+            machine_registered = system("#{path_VBoxManage} showvminfo \"#{registered_vm_id}\" --machinereadable", out: File::NULL, err: File::NULL)
+          end
+
+          unless machine_registered
+            box_controller = Hosts.box_virtio_controller(host['settings']['box'], host['settings']['box_version'])
+            attach_controller = box_controller || 'VirtIO Controller'
             config.vm.provider "virtualbox" do |storage_provider|
-              storage_provider.customize ["storagectl", :id, "--name", "VirtIO Controller", "--add", "virtio-scsi", '--hostiocache', 'off']
-              host['disks']['additional_disks'].each do |disks|
+              if box_controller.nil?
+                storage_provider.customize ["storagectl", :id, "--name", "VirtIO Controller", "--add", "virtio-scsi", '--hostiocache', 'off']
+              end
+              host['disks']['additional_disks'].each_with_index do |disks, diskindex|
                 local_disk_filename = File.join(disks_directory, "#{disks['volume_name']}.vdi")
-                storage_provider.customize ['storageattach', :id, '--storagectl', "VirtIO Controller", '--port', disks['port'], '--device', 0, '--type', 'hdd', '--medium', local_disk_filename]
+                storage_provider.customize ['storageattach', :id, '--storagectl', attach_controller, '--port', disks['port'] || diskindex + 1, '--device', 0, '--type', 'hdd', '--medium', local_disk_filename]
               end
             end
           end
@@ -263,16 +274,21 @@ class Hosts
                 vm_info = `#{path_VBoxManage} showvminfo "#{vm_id}" --machinereadable`
                 vm_state = vm_info[/VMState="(.+?)"/, 1]
                 if ['poweroff', 'aborted'].include?(vm_state)
-                  controllers = vm_info.scan(/storagecontrollername\d+="(.+?)"/).flatten
-                  unless controllers.include?('VirtIO Controller')
+                  controller_names = vm_info.scan(/storagecontrollername(\d+)="(.+?)"/).to_h
+                  controller_types = vm_info.scan(/storagecontrollertype(\d+)="(.+?)"/).to_h
+                  virtio_index = controller_types.find { |_, type| type == 'VirtioSCSI' }&.first
+                  controller = virtio_index ? controller_names[virtio_index] : nil
+                  if controller.nil?
                     system(path_VBoxManage, 'storagectl', vm_id, '--name', 'VirtIO Controller', '--add', 'virtio-scsi', '--hostiocache', 'off')
+                    controller = 'VirtIO Controller'
                   end
-                  host['disks']['additional_disks'].each do |disks|
+                  host['disks']['additional_disks'].each_with_index do |disks, diskindex|
                     local_disk_filename = File.join(disks_directory, "#{disks['volume_name']}.vdi")
                     next unless File.exist?(local_disk_filename)
-                    attachment = vm_info[/"VirtIO Controller-#{disks['port']}-0"="(.+?)"/, 1]
+                    port = (disks['port'] || diskindex + 1).to_s
+                    attachment = vm_info[/"#{Regexp.escape(controller)}-#{port}-0"="(.+?)"/, 1]
                     next unless attachment.nil? || attachment == 'none'
-                    system(path_VBoxManage, 'storageattach', vm_id, '--storagectl', 'VirtIO Controller', '--port', disks['port'].to_s, '--device', '0', '--type', 'hdd', '--medium', local_disk_filename)
+                    system(path_VBoxManage, 'storageattach', vm_id, '--storagectl', controller, '--port', port, '--device', '0', '--type', 'hdd', '--medium', local_disk_filename)
                   end
                 end
               end
@@ -465,6 +481,64 @@ class Hosts
         end
         ## End Vagrant-Zones Configurations
 
+        ##### Begin DigitalOcean Configurations #####
+        if provider == 'digital_ocean'
+          do_config = host['digitalocean'] || {}
+
+          ## Ensure a Block Storage volume exists per additional disk so the droplet
+          ## separates OS and application data like the other providers; volumes are
+          ## found by name, so they survive droplet destroy/rebuild cycles
+          do_volume_ids = []
+          if %w[up rebuild].include?(ARGV[0]) && host['disks'].is_a?(Hash) && !host['disks']['additional_disks'].nil?
+            do_token = secrets['DO_TOKEN'] || do_config['token']
+            host['disks']['additional_disks'].each do |disks|
+              ## DO volume names must be strictly lowercase alphanumeric
+              volume_name = "vol#{host['settings']['server_id']}#{disks['volume_name']}".downcase.gsub(/[^a-z0-9]/, '')
+              size_gb = disks['size'].to_s.match(/(\d+(\.\d+)?)/)[0].to_f.ceil
+              do_volume_ids << Hosts.ensure_do_volume(do_token, do_config['region'], volume_name, size_gb)
+            end
+          end
+
+          server.vm.provider :digital_ocean do |do_provider, override|
+            ## The box's digital_ocean provider artifact from box_url is metadata-only (same as the aws one);
+            ## the droplet itself boots from the DigitalOcean-side image referenced below
+            override.nfs.functional = false
+            override.vm.allowed_synced_folder_types = :rsync
+
+            do_provider.token = secrets['DO_TOKEN'] || do_config['token']
+            do_provider.image = do_config['image']
+            do_provider.region = do_config['region']
+            do_provider.size = do_config['size']
+            do_provider.ssh_key_name = do_config['ssh_key_name'] if do_config.key?('ssh_key_name') && !do_config['ssh_key_name'].nil?
+            do_provider.setup = do_config['setup'] if do_config.key?('setup') && !do_config['setup'].nil?
+            do_provider.private_networking = do_config['private_networking'] if do_config.key?('private_networking') && !do_config['private_networking'].nil?
+            do_provider.vpc_uuid = do_config['vpc_uuid'] if do_config.key?('vpc_uuid') && !do_config['vpc_uuid'].nil?
+            do_provider.ipv6 = do_config['ipv6'] if do_config.key?('ipv6') && !do_config['ipv6'].nil?
+            do_provider.backups_enabled = do_config['backups_enabled'] if do_config.key?('backups_enabled') && !do_config['backups_enabled'].nil?
+            do_provider.monitoring = do_config['monitoring'] if do_config.key?('monitoring') && !do_config['monitoring'].nil?
+            do_provider.droplet_agent = do_config['droplet_agent'] if do_config.key?('droplet_agent') && !do_config['droplet_agent'].nil?
+            do_provider.tags = do_config['tags'] if do_config.key?('tags') && !do_config['tags'].nil?
+            do_provider.user_data = do_config['user_data'] if do_config.key?('user_data') && !do_config['user_data'].nil?
+            do_provider.volumes = do_volume_ids unless do_volume_ids.empty?
+          end
+
+          ## Delete the Block Storage volumes with the droplet, matching the
+          ## VirtualBox behavior of removing additional disks on destroy
+          config.trigger.after :destroy do |trigger|
+            trigger.info = "Deleting DigitalOcean volumes"
+            trigger.ruby do
+              if host['disks'].is_a?(Hash) && !host['disks']['additional_disks'].nil?
+                do_token = secrets['DO_TOKEN'] || do_config['token']
+                host['disks']['additional_disks'].each do |disks|
+                  volume_name = "vol#{host['settings']['server_id']}#{disks['volume_name']}".downcase.gsub(/[^a-z0-9]/, '')
+                  Hosts.delete_do_volume(do_token, do_config['region'], volume_name)
+                end
+              end
+            end
+          end
+        end
+        ##### End DigitalOcean Configurations #####
+
         if host['vars'] && host['vars'].key?('git_vault_password')
           Hosts.write_results_file(host['vars']['git_vault_password'], 'provisioners/ansible/git_vault_password', false)
         end
@@ -609,8 +683,7 @@ class Hosts
           files_to_delete = [
             '.vagrant/done.txt',
             '.vagrant/provisioned-adapters.yml',
-            'results.yml',
-            host['settings']['vagrant_user_private_key_path']
+            'results.yml'
           ]
           trigger.ruby do
             Hosts.delete_files(trigger, files_to_delete)
@@ -692,13 +765,31 @@ class Hosts
                   puts "#{ prefix }     #{ open_url }"
                   system("echo '" + open_url + "' > .vagrant/done.txt")
 
-                  ## Copy the Updated Key from the VM, and then Delete the default Template Key from the VM
+                  ## The rotated key must never be fetched INTO the identity
+                  ## file the fetch connection authenticates with — that races
+                  ## itself into a password prompt. The fetch lands in a temp
+                  ## file, and only replaces the identity (removing its stale
+                  ## .pub) once the content looks like a private key. Shell
+                  ## redirection is avoided on purpose: under PowerShell it
+                  ## re-encodes the key to UTF-16, which net-ssh rejects.
                   if host['settings']['vagrant_ssh_insert_key']
                     puts "#{ prefix } Transferring New SSH key"
-                    id_transfer_cmd = "vagrant ssh -c 'cat /home/#{host['settings']['vagrant_user']}/.ssh/id_ssh_rsa' > #{host['settings']['vagrant_user_private_key_path']}"
-                    id_transfer_cmd = "vagrant scp :/home/#{host['settings']['vagrant_user']}/.ssh/id_ssh_rsa #{host['settings']['vagrant_user_private_key_path']}" if Vagrant.has_plugin?("vagrant-scp-sync")
-                    system(id_transfer_cmd)
-                    system(%x(vagrant ssh -c "sed -i '/vagrantup/d' /home/#{host['settings']['vagrant_user']}/.ssh/id_ssh_rsa"))
+                    key_src = "/home/#{host['settings']['vagrant_user']}/.ssh/id_ssh_rsa"
+                    key_dest = host['settings']['vagrant_user_private_key_path']
+                    key_tmp = "#{key_dest}.new"
+                    if Vagrant.has_plugin?("vagrant-scp-sync")
+                      system("vagrant scp :#{key_src} #{key_tmp}")
+                    else
+                      key_data = `vagrant ssh -c "cat #{key_src}"`
+                      File.binwrite(key_tmp, key_data) unless key_data.to_s.strip.empty?
+                    end
+                    if File.file?(key_tmp) && File.read(key_tmp, 64).to_s.include?('PRIVATE KEY')
+                      FileUtils.mv(key_tmp, key_dest)
+                      FileUtils.rm_f("#{key_dest}.pub")
+                    else
+                      FileUtils.rm_f(key_tmp)
+                      puts "#{ prefix } Rotated key not published by the guest; keeping the existing identity"
+                    end
                   end
                 end
               else
@@ -785,6 +876,66 @@ class Hosts
     else
       'generic'  # Default for Linux and other types
     end
+  end
+
+  def self.box_virtio_controller(box, box_version)
+    return nil if box.to_s.empty? || box_version.to_s.empty?
+
+    vagrant_home = (ENV['VAGRANT_HOME'] || File.join(Dir.home, '.vagrant.d')).tr('\\', '/')
+    pattern = File.join(vagrant_home, 'boxes', box.gsub('/', '-VAGRANTSLASH-'), box_version.to_s, '{.,*}', 'virtualbox', 'box.ovf')
+    ovf = Dir.glob(pattern).first
+    return nil if ovf.nil?
+
+    tag = File.read(ovf).scan(/<StorageController\b[^>]*>/).find { |controller| controller.include?('type="VirtioSCSI"') }
+    tag && tag[/\bname="([^"]+)"/, 1]
+  end
+
+  ## Finds a DigitalOcean Block Storage volume by name in the region, creating it
+  ## when absent, and returns its id. Left unformatted so the disks role formats
+  ## and mounts it exactly like the additional disks of the other providers.
+  def self.ensure_do_volume(token, region, name, size_gb)
+    require 'net/http'
+    require 'uri'
+    require 'json'
+
+    raise 'DigitalOcean additional disks need DO_TOKEN in .secrets.yml (or digitalocean.token in Hosts.yml)' if token.to_s.empty?
+
+    headers = { 'Authorization' => "Bearer #{token}", 'Content-Type' => 'application/json' }
+
+    uri = URI("https://api.digitalocean.com/v2/volumes?name=#{name}&region=#{region}")
+    response = Net::HTTP.start(uri.host, uri.port, use_ssl: true) { |http| http.get(uri.request_uri, headers) }
+    volumes = JSON.parse(response.body)['volumes'] || []
+    return volumes.first['id'] unless volumes.empty?
+
+    uri = URI('https://api.digitalocean.com/v2/volumes')
+    body = { name: name, region: region, size_gigabytes: size_gb }.to_json
+    response = Net::HTTP.start(uri.host, uri.port, use_ssl: true) { |http| http.post(uri.request_uri, body, headers) }
+    volume = JSON.parse(response.body)['volume']
+    raise "DigitalOcean volume creation failed for #{name}: #{response.body}" if volume.nil?
+
+    puts "==> Created DigitalOcean volume #{name} (#{size_gb}GB) in #{region}"
+    volume['id']
+  end
+
+  ## Deletes a DigitalOcean Block Storage volume by name in the region. Retries
+  ## briefly because the droplet deletion that detaches the volume is asynchronous.
+  def self.delete_do_volume(token, region, name)
+    require 'net/http'
+    require 'uri'
+
+    return if token.to_s.empty?
+
+    uri = URI("https://api.digitalocean.com/v2/volumes?name=#{name}&region=#{region}")
+    5.times do
+      request = Net::HTTP::Delete.new(uri.request_uri, { 'Authorization' => "Bearer #{token}" })
+      response = Net::HTTP.start(uri.host, uri.port, use_ssl: true) { |http| http.request(request) }
+      if response.code == '204'
+        puts "==> Deleted DigitalOcean volume #{name} in #{region}"
+        return
+      end
+      sleep 5
+    end
+    puts "==> WARNING: could not delete DigitalOcean volume #{name} in #{region} — remove it in the control panel"
   end
 
   def self.load_secrets
