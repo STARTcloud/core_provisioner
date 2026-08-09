@@ -686,6 +686,11 @@ class Hosts
             'results.yml'
           ]
           trigger.ruby do
+            pristine_key = File.join(File.dirname(__FILE__), 'ssh_keys', 'id_rsa')
+            rotated_key = host['settings']['vagrant_user_private_key_path']
+            unless rotated_key.to_s.empty? || (File.exist?(rotated_key) && File.identical?(rotated_key, pristine_key))
+              files_to_delete += [rotated_key, "#{rotated_key}.pub"]
+            end
             Hosts.delete_files(trigger, files_to_delete)
           end
         end
@@ -773,22 +778,27 @@ class Hosts
                   ## redirection is avoided on purpose: under PowerShell it
                   ## re-encodes the key to UTF-16, which net-ssh rejects.
                   if host['settings']['vagrant_ssh_insert_key']
-                    puts "#{ prefix } Transferring New SSH key"
-                    key_src = "/home/#{host['settings']['vagrant_user']}/.ssh/id_ssh_rsa"
                     key_dest = host['settings']['vagrant_user_private_key_path']
-                    key_tmp = "#{key_dest}.new"
-                    if Vagrant.has_plugin?("vagrant-scp-sync")
-                      system("vagrant scp :#{key_src} #{key_tmp}")
+                    pristine_key = File.join(File.dirname(__FILE__), 'ssh_keys', 'id_rsa')
+                    if File.exist?(key_dest) && File.identical?(key_dest, pristine_key)
+                      puts "#{ prefix } vagrant_user_private_key_path points at the driver's pristine key; skipping rotated-key transfer"
                     else
-                      key_data = `vagrant ssh -c "cat #{key_src}"`
-                      File.binwrite(key_tmp, key_data) unless key_data.to_s.strip.empty?
-                    end
-                    if File.file?(key_tmp) && File.read(key_tmp, 64).to_s.include?('PRIVATE KEY')
-                      FileUtils.mv(key_tmp, key_dest)
-                      FileUtils.rm_f("#{key_dest}.pub")
-                    else
-                      FileUtils.rm_f(key_tmp)
-                      puts "#{ prefix } Rotated key not published by the guest; keeping the existing identity"
+                      puts "#{ prefix } Transferring New SSH key"
+                      key_src = "/home/#{host['settings']['vagrant_user']}/.ssh/id_ssh_rsa"
+                      key_tmp = "#{key_dest}.new"
+                      if Vagrant.has_plugin?("vagrant-scp-sync")
+                        system("vagrant scp :#{key_src} #{key_tmp}")
+                      else
+                        key_data = `vagrant ssh -c "cat #{key_src}"`
+                        File.binwrite(key_tmp, key_data) unless key_data.to_s.strip.empty?
+                      end
+                      if File.file?(key_tmp) && File.read(key_tmp, 64).to_s.include?('PRIVATE KEY')
+                        FileUtils.mv(key_tmp, key_dest)
+                        FileUtils.rm_f("#{key_dest}.pub")
+                      else
+                        FileUtils.rm_f(key_tmp)
+                        puts "#{ prefix } Rotated key not published by the guest; keeping the existing identity"
+                      end
                     end
                   end
                 end

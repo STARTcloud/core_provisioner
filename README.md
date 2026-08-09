@@ -69,6 +69,8 @@ Released provisioners must pin an exact core version — never a floating branch
 
 The provisioning content itself (Ansible collections, templates, scripts, installers) belongs to the consuming provisioner, not to this repo.
 
+Vagrant caveat: `vagrant rsync` reads the folder list snapshotted in `.vagrant/machines/<name>/<provider>/synced_folders` at up/reload — not live config. A folder newly declared in `Hosts.yml` needs one `vagrant reload` before `vagrant rsync` sees it. That is Vagrant core behavior; the driver re-declares folders fresh on every run.
+
 ## Provider Support
 
 | Provider | Supported |
