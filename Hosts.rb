@@ -530,6 +530,7 @@ class Hosts
               if host['disks'].is_a?(Hash) && !host['disks']['additional_disks'].nil?
                 do_token = secrets['DO_TOKEN'] || do_config['token']
                 host['disks']['additional_disks'].each do |disks|
+                  next if disks['persist']
                   volume_name = "vol#{host['settings']['server_id']}#{disks['volume_name']}".downcase.gsub(/[^a-z0-9]/, '')
                   Hosts.delete_do_volume(do_token, do_config['region'], volume_name)
                 end
