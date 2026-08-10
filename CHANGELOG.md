@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.15](https://github.com/STARTcloud/core_provisioner/compare/v0.2.14...v0.2.15) (2026-08-10)
+
+
+### Bug Fixes
+
+* add disk  persistant on additional datasets ([c0381b3](https://github.com/STARTcloud/core_provisioner/commit/c0381b346b5add7dc636660ca8290b590733ceef))
+* core stuffs ([5b2a835](https://github.com/STARTcloud/core_provisioner/commit/5b2a8353d041cfcef22e1527ea70f6ec276f6806))
+* updating key fixes and transfers ([d3eea71](https://github.com/STARTcloud/core_provisioner/commit/d3eea71a9f9ccecd9752e5dadf1ab8b4088c4a5e))
+
 ## [0.2.14](https://github.com/STARTcloud/core_provisioner/compare/v0.2.13...v0.2.14) (2026-07-28)
 
 
