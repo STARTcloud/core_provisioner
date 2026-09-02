@@ -29,6 +29,7 @@ class Hosts
       ENV['VAGRANT_SERVER_URL'] = host['settings']['box_url'] if host['settings'].has_key?('box_url')
 
       provider = host['settings']['provider_type']
+      provider = 'zone' if provider == 'zones'
       machine_domain = host['settings']['machine_domain'] || host['settings']['domain']
 
       config.vm.provider provider
@@ -317,11 +318,7 @@ class Hosts
         end
 
         server.vm.provider :virtualbox do |vb|
-          if host['settings']['memory'].to_s =~ /gb|g|/
-            vm_memory = 1024 * host['settings']['memory'].to_s.tr('^0-9', '').to_i
-          elsif host['settings']['memory'] =~ /mb|m|/
-            vm_memory = host['settings']['memory'].tr('^0-9', '')
-          end
+          vm_memory = Hosts.memory_mb(host['settings']['memory'])
           vb.name = "#{host['settings']['server_id']}--#{host['settings']['hostname']}.#{machine_domain}"
           vb.gui = host['settings']['show_console']
           vb.customize ['modifyvm', :id, '--ostype', host['settings']['os_type'] || 'Debian_64']
@@ -359,11 +356,7 @@ class Hosts
 
         ##### Begin UTM type Configurations #####
         if provider == 'utm'
-          if host['settings']['memory'].to_s =~ /gb|g|/
-            vm_memory = 1024 * host['settings']['memory'].to_s.tr('^0-9', '').to_i
-          elsif host['settings']['memory'] =~ /mb|m|/
-            vm_memory = host['settings']['memory'].tr('^0-9', '')
-          end
+          vm_memory = Hosts.memory_mb(host['settings']['memory'])
 
           # Determine directory share mode based on folder configurations
           directory_share_mode = "none"
@@ -811,18 +804,24 @@ class Hosts
         end
       end
 
-      if host['zones'] && host['zones'].has_key?('post_provision_boot') && host['zones']['post_provision_boot'] && host['settings']['provider_type'] == 'zones'
+      if host['zones'] && host['zones']['post_provision_boot'] && provider == 'zone'
         config.trigger.after [:up, :provision] do |trigger|
           trigger.info = "post_provision_boot is true, Waiting for instance to stop"
           trigger.ruby do |env, machine|
+            shutdown_wait = (host['zones']['clean_shutdown_time'] || 300).to_i
+            deadline = Time.now + 30 + shutdown_wait
             sleep 30
+            zone_stopped = false
             loop do
-              system("vagrant status #{machine.name}")
-              break if %x(vagrant status #{machine.name}) =~ /stopped/
+              zone_stopped = %x(vagrant status #{machine.name}) =~ /stopped/
+              break if zone_stopped || Time.now > deadline
               sleep 10
             end
-            post_reboot_cmd = "pfexec zoneadm -z #{machine.name} boot"
-            system(post_reboot_cmd)
+            if zone_stopped
+              system("pfexec zoneadm -z #{machine.name} boot")
+            else
+              puts "==> #{machine.name}: still running after #{shutdown_wait}s, post_provision_boot skipped"
+            end
           end
         end
       end
@@ -887,6 +886,11 @@ class Hosts
     else
       'generic'  # Default for Linux and other types
     end
+  end
+
+  def self.memory_mb(memory)
+    amount = memory.to_s[/\d+(\.\d+)?/].to_f
+    memory.to_s =~ /m/i ? amount.round : (amount * 1024).round
   end
 
   def self.box_virtio_controller(box, box_version)
