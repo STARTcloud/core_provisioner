@@ -34,12 +34,21 @@ jobs:
       minor: ${{ steps.release.outputs.minor }}
       patch: ${{ steps.release.outputs.patch }}
     steps:
+      - name: Mint App token
+        id: app
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.BOT_APP_ID }}
+          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+
       - name: Checkout code
         uses: actions/checkout@v7
 
       - name: Release Please
         uses: googleapis/release-please-action@v5
         id: release
+        with:
+          token: ${{ steps.app.outputs.token }}
 
   build-core:
     name: Build Core Artifact
@@ -70,6 +79,7 @@ jobs:
         consumer:
           - STARTcloud/startcloud_generic_provisioner
           - Moonshine-IDE/moonshinedev_provisioner_private
+          - PhoneSwitchBoard/switchboard_provisioner_private
     steps:
       - name: Split owner and repo
         id: target
@@ -81,9 +91,9 @@ jobs:
 
       - name: Mint App token
         id: app
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ secrets.BOT_APP_ID }}
+          client-id: ${{ secrets.BOT_APP_ID }}
           private-key: ${{ secrets.BOT_PRIVATE_KEY }}
           owner: ${{ steps.target.outputs.owner }}
           repositories: ${{ steps.target.outputs.repo }}
