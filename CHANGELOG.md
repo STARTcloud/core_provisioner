@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.16](https://github.com/STARTcloud/core_provisioner/compare/v0.2.15...v0.2.16) (2026-09-02)
+
+
+### Bug Fixes
+
+* harden rotated-key transfer, add DO volume persist, notify switchboard, mint App tokens on v3 ([487a04f](https://github.com/STARTcloud/core_provisioner/commit/487a04f7a39c8b4db2a5aabe6c684860f625d72b))
+
 ## [0.2.15](https://github.com/STARTcloud/core_provisioner/compare/v0.2.14...v0.2.15) (2026-08-10)
 
 
