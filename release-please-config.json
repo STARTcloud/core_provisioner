@@ -1,17 +1,17 @@
 {
-    "packages": {
-        ".": {
-            "changelog-path": "CHANGELOG.md",
-            "release-type": "ruby",
-            "bump-minor-pre-major": true,
-            "bump-patch-for-minor-pre-major": true,
-            "package-name": "core_provisioner",
-            "draft": false,
-            "version-file": "version.rb",
-            "include-component-in-tag": false,
-            "prerelease": false,
-            "default-branch": "main"
-        }
-    },
-    "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json"
+  "packages": {
+    ".": {
+      "changelog-path": "CHANGELOG.md",
+      "release-type": "ruby",
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true,
+      "package-name": "core_provisioner",
+      "draft": false,
+      "version-file": "version.rb",
+      "include-component-in-tag": false,
+      "prerelease": false,
+      "default-branch": "main"
+    }
+  },
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json"
 }

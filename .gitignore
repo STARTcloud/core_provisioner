@@ -20,6 +20,7 @@ driver.version
 
 # Tooling
 .claude
+notifications.md
 
 # Editor / OS noise
 .DS_Store

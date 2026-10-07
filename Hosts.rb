@@ -16,6 +16,8 @@ class Hosts
   def Hosts.configure(config, settings)
     secrets = Hosts.load_secrets
 
+    Hosts.check_collections if %w[up provision reload].include?(ARGV[0])
+
     ENV['ATLAS_TOKEN'] = secrets['ATLAS_TOKEN'] if secrets && secrets.key?('ATLAS_TOKEN')
 
     # Main loop to configure VM
@@ -951,6 +953,17 @@ class Hosts
       sleep 5
     end
     puts "==> WARNING: could not delete DigitalOcean volume #{name} in #{region} — remove it in the control panel"
+  end
+
+  def self.check_collections
+    root = File.join(File.dirname(__FILE__), '..')
+    Dir.glob(File.join(root, 'collections', '*.version')).each do |pin|
+      namespace, name = File.basename(pin, '.version').split('.', 2)
+      repo, tag = File.read(pin).split
+      next if File.file?(File.join(root, 'provisioners', 'ansible_collections', namespace, name, 'MANIFEST.json'))
+      puts "==> collections/#{File.basename(pin)} pins #{namespace}.#{name} #{tag} but provisioners/ansible_collections/#{namespace}/#{name}/MANIFEST.json is missing"
+      puts "==> Install it with: ansible-galaxy collection install https://github.com/#{repo}/releases/download/#{tag}/#{namespace}-#{name}-#{tag.sub(/\Av/, '')}.tar.gz -p provisioners/ansible_collections"
+    end
   end
 
   def self.load_secrets
