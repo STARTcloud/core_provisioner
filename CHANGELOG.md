@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.17](https://github.com/STARTcloud/core_provisioner/compare/v0.2.16...v0.2.17) (2026-10-07)
+
+
+### Features
+
+* adopt the markdown format gate, warn on missing pinned collections, notify the HCL Domino provisioners ([7f479ce](https://github.com/STARTcloud/core_provisioner/commit/7f479ce87ac3c87f95229e075209763cb5365515))
+
+
+### Bug Fixes
+
+* dispatch driver releases to the VoltMX Go and Windows provisioners ([e144f9e](https://github.com/STARTcloud/core_provisioner/commit/e144f9ec044fd412686083e8fc85c0d6ff4ada35))
+
 ## [0.2.16](https://github.com/STARTcloud/core_provisioner/compare/v0.2.15...v0.2.16) (2026-09-02)
 
 
